@@ -1,0 +1,191 @@
+/**
+ * Database type definitions for Supabase.
+ *
+ * To regenerate after schema changes:
+ *   npx supabase gen types typescript --project-id YOUR_PROJECT_REF > src/lib/supabase/types.ts
+ *
+ * For now this is a hand-written version matching schema.sql.
+ */
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
+export interface Database {
+  public: {
+    Tables: {
+      sports: {
+        Row: {
+          id: string
+          name: string
+          abbreviation: string
+          is_active: boolean
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['sports']['Row'], 'created_at'>
+        Update: Partial<Database['public']['Tables']['sports']['Insert']>
+      }
+      conferences: {
+        Row: {
+          id: string
+          sport_id: string
+          external_id: string | null
+          name: string
+          abbreviation: string
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['conferences']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['conferences']['Insert']>
+      }
+      teams: {
+        Row: {
+          id: string
+          sport_id: string
+          conference_id: string | null
+          external_id: string | null
+          name: string
+          abbreviation: string | null
+          mascot: string | null
+          logo_url: string | null
+          color: string | null
+          alt_color: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['teams']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['teams']['Insert']>
+      }
+      games: {
+        Row: {
+          id: string
+          sport_id: string
+          external_id: number | null
+          season: number
+          season_type: string
+          week: number | null
+          game_date: string | null
+          home_team_id: string | null
+          away_team_id: string | null
+          home_team_points: number | null
+          away_team_points: number | null
+          status: string
+          neutral_site: boolean
+          conference_game: boolean
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['games']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['games']['Insert']>
+      }
+      profiles: {
+        Row: {
+          id: string
+          username: string | null
+          display_name: string | null
+          avatar_url: string | null
+          bio: string | null
+          favorite_team_id: string | null
+          is_admin: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['profiles']['Insert']>
+      }
+      prediction_sets: {
+        Row: {
+          id: string
+          user_id: string
+          sport_id: string
+          season: number
+          name: string | null
+          is_locked: boolean
+          submitted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['prediction_sets']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['prediction_sets']['Insert']>
+      }
+      predictions_game: {
+        Row: {
+          id: string
+          prediction_set_id: string
+          user_id: string
+          game_id: string
+          picked_team_id: string
+          confidence: number | null
+          is_correct: boolean | null
+          points_awarded: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['predictions_game']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['predictions_game']['Insert']>
+      }
+      predictions_record: {
+        Row: {
+          id: string
+          prediction_set_id: string
+          user_id: string
+          team_id: string
+          predicted_wins: number
+          predicted_losses: number
+          actual_wins: number | null
+          actual_losses: number | null
+          is_correct: boolean | null
+          points_awarded: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['predictions_record']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['predictions_record']['Insert']>
+      }
+      predictions_standings: {
+        Row: {
+          id: string
+          prediction_set_id: string
+          user_id: string
+          conference_id: string
+          team_id: string
+          predicted_rank: number
+          actual_rank: number | null
+          points_awarded: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['predictions_standings']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['predictions_standings']['Insert']>
+      }
+      sync_log: {
+        Row: {
+          id: string
+          sport_id: string
+          sync_type: string
+          season: number | null
+          week: number | null
+          status: string
+          records_affected: number | null
+          error_message: string | null
+          synced_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['sync_log']['Row'], 'id' | 'synced_at'>
+        Update: Partial<Database['public']['Tables']['sync_log']['Insert']>
+      }
+    }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+  }
+}
+
+// Convenience row types
+export type Sport = Database['public']['Tables']['sports']['Row']
+export type Conference = Database['public']['Tables']['conferences']['Row']
+export type Team = Database['public']['Tables']['teams']['Row']
+export type Game = Database['public']['Tables']['games']['Row']
+export type Profile = Database['public']['Tables']['profiles']['Row']
+export type PredictionSet = Database['public']['Tables']['prediction_sets']['Row']
+export type PredictionGame = Database['public']['Tables']['predictions_game']['Row']
+export type PredictionRecord = Database['public']['Tables']['predictions_record']['Row']
+export type PredictionStandings = Database['public']['Tables']['predictions_standings']['Row']
+export type SyncLog = Database['public']['Tables']['sync_log']['Row']

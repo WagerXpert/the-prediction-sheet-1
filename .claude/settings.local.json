@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "PowerShell(git init *)",
-      "PowerShell(gh auth *)"
+      "PowerShell(gh auth *)",
+      "Bash(dir \"C:\\\\Users\\\\braun\\\\OneDrive\\\\Desktop\\\\The Prediction Sheet #1\")",
+      "PowerShell(New-Item *)"
     ]
   }
 }
