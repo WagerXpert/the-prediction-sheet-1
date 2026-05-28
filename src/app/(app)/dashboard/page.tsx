@@ -45,7 +45,7 @@ export default async function DashboardPage() {
           emoji="📊"
           title="Season Records"
           desc={`Forecast each team's final win-loss record for ${CURRENT_SEASON}.`}
-          href="/cfb"
+          href="/cfb/season-records"
           open
           cta="Make Predictions"
         />
@@ -53,7 +53,7 @@ export default async function DashboardPage() {
           emoji="🏆"
           title="Conference Standings"
           desc="Rank every team in their conference from top to bottom."
-          href="/cfb"
+          href="/cfb/standings"
           open
           cta="Make Predictions"
         />

@@ -22,6 +22,7 @@ export default function CFBHubPage() {
             title: 'Season Records',
             desc: `Predict each team's win-loss record for the ${CURRENT_SEASON} season.`,
             badge: 'Open now',
+            href: '/cfb/season-records',
             available: true,
           },
           {
@@ -29,6 +30,7 @@ export default function CFBHubPage() {
             title: 'Conference Standings',
             desc: 'Rank every team in their conference from 1st to last.',
             badge: 'Open now',
+            href: '/cfb/standings',
             available: true,
           },
           {
@@ -36,31 +38,41 @@ export default function CFBHubPage() {
             title: 'Game Picks',
             desc: 'Pick the winner for every game, week by week.',
             badge: 'Opens Week 1',
+            href: null,
             available: false,
           },
-        ].map((item) => (
-          <div
-            key={item.title}
-            className={`flex flex-col gap-3 p-6 rounded-2xl border transition-all ${
-              item.available
-                ? 'border-zinc-200 hover:border-[#84cc16] hover:shadow-md'
-                : 'border-zinc-100 bg-zinc-50'
-            }`}
-          >
-            <span className="text-3xl">{item.emoji}</span>
-            <div className="flex-1">
-              <h3 className="text-lg font-bold">{item.title}</h3>
-              <p className="text-sm text-zinc-500 mt-1 leading-relaxed">{item.desc}</p>
-            </div>
-            <span
-              className={`text-xs font-semibold px-2.5 py-1 rounded-full w-fit ${
-                item.available ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'
-              }`}
+        ].map((item) =>
+          item.available && item.href ? (
+            <Link
+              key={item.title}
+              href={item.href}
+              className="flex flex-col gap-3 p-6 rounded-2xl border border-zinc-200 hover:border-[#84cc16] hover:shadow-md transition-all"
             >
-              {item.badge}
-            </span>
-          </div>
-        ))}
+              <span className="text-3xl">{item.emoji}</span>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold">{item.title}</h3>
+                <p className="text-sm text-zinc-500 mt-1 leading-relaxed">{item.desc}</p>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full w-fit bg-green-100 text-green-700">
+                {item.badge}
+              </span>
+            </Link>
+          ) : (
+            <div
+              key={item.title}
+              className="flex flex-col gap-3 p-6 rounded-2xl border border-zinc-100 bg-zinc-50"
+            >
+              <span className="text-3xl">{item.emoji}</span>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold">{item.title}</h3>
+                <p className="text-sm text-zinc-500 mt-1 leading-relaxed">{item.desc}</p>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full w-fit bg-zinc-100 text-zinc-500">
+                {item.badge}
+              </span>
+            </div>
+          )
+        )}
       </div>
 
       <div className="mb-12">

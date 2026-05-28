@@ -3,8 +3,6 @@
  *
  * To regenerate after schema changes:
  *   npx supabase gen types typescript --project-id YOUR_PROJECT_REF > src/lib/supabase/types.ts
- *
- * For now this is a hand-written version matching schema.sql.
  */
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
@@ -22,6 +20,7 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['sports']['Row'], 'created_at'>
         Update: Partial<Database['public']['Tables']['sports']['Insert']>
+        Relationships: []
       }
       conferences: {
         Row: {
@@ -34,6 +33,15 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['conferences']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['conferences']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'conferences_sport_id_fkey'
+            columns: ['sport_id']
+            isOneToOne: false
+            referencedRelation: 'sports'
+            referencedColumns: ['id']
+          },
+        ]
       }
       teams: {
         Row: {
@@ -52,6 +60,22 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['teams']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['teams']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'teams_sport_id_fkey'
+            columns: ['sport_id']
+            isOneToOne: false
+            referencedRelation: 'sports'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'teams_conference_id_fkey'
+            columns: ['conference_id']
+            isOneToOne: false
+            referencedRelation: 'conferences'
+            referencedColumns: ['id']
+          },
+        ]
       }
       games: {
         Row: {
@@ -75,6 +99,29 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['games']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['games']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'games_sport_id_fkey'
+            columns: ['sport_id']
+            isOneToOne: false
+            referencedRelation: 'sports'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'games_home_team_id_fkey'
+            columns: ['home_team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'games_away_team_id_fkey'
+            columns: ['away_team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -90,6 +137,15 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'profiles_favorite_team_id_fkey'
+            columns: ['favorite_team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+        ]
       }
       prediction_sets: {
         Row: {
@@ -103,8 +159,31 @@ export interface Database {
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database['public']['Tables']['prediction_sets']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Insert: {
+          user_id: string
+          sport_id: string
+          season: number
+          name?: string | null
+          is_locked?: boolean
+          submitted_at?: string | null
+        }
         Update: Partial<Database['public']['Tables']['prediction_sets']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'prediction_sets_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'prediction_sets_sport_id_fkey'
+            columns: ['sport_id']
+            isOneToOne: false
+            referencedRelation: 'sports'
+            referencedColumns: ['id']
+          },
+        ]
       }
       predictions_game: {
         Row: {
@@ -119,8 +198,46 @@ export interface Database {
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database['public']['Tables']['predictions_game']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Insert: {
+          prediction_set_id: string
+          user_id: string
+          game_id: string
+          picked_team_id: string
+          confidence?: number | null
+          is_correct?: boolean | null
+          points_awarded?: number
+        }
         Update: Partial<Database['public']['Tables']['predictions_game']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'predictions_game_prediction_set_id_fkey'
+            columns: ['prediction_set_id']
+            isOneToOne: false
+            referencedRelation: 'prediction_sets'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'predictions_game_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'predictions_game_game_id_fkey'
+            columns: ['game_id']
+            isOneToOne: false
+            referencedRelation: 'games'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'predictions_game_picked_team_id_fkey'
+            columns: ['picked_team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+        ]
       }
       predictions_record: {
         Row: {
@@ -137,8 +254,41 @@ export interface Database {
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database['public']['Tables']['predictions_record']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Insert: {
+          prediction_set_id: string
+          user_id: string
+          team_id: string
+          predicted_wins: number
+          predicted_losses: number
+          actual_wins?: number | null
+          actual_losses?: number | null
+          is_correct?: boolean | null
+          points_awarded?: number
+        }
         Update: Partial<Database['public']['Tables']['predictions_record']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'predictions_record_prediction_set_id_fkey'
+            columns: ['prediction_set_id']
+            isOneToOne: false
+            referencedRelation: 'prediction_sets'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'predictions_record_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'predictions_record_team_id_fkey'
+            columns: ['team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+        ]
       }
       predictions_standings: {
         Row: {
@@ -153,8 +303,46 @@ export interface Database {
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database['public']['Tables']['predictions_standings']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Insert: {
+          prediction_set_id: string
+          user_id: string
+          conference_id: string
+          team_id: string
+          predicted_rank: number
+          actual_rank?: number | null
+          points_awarded?: number
+        }
         Update: Partial<Database['public']['Tables']['predictions_standings']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'predictions_standings_prediction_set_id_fkey'
+            columns: ['prediction_set_id']
+            isOneToOne: false
+            referencedRelation: 'prediction_sets'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'predictions_standings_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'predictions_standings_conference_id_fkey'
+            columns: ['conference_id']
+            isOneToOne: false
+            referencedRelation: 'conferences'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'predictions_standings_team_id_fkey'
+            columns: ['team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+        ]
       }
       sync_log: {
         Row: {
@@ -170,11 +358,29 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['sync_log']['Row'], 'id' | 'synced_at'>
         Update: Partial<Database['public']['Tables']['sync_log']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'sync_log_sport_id_fkey'
+            columns: ['sport_id']
+            isOneToOne: false
+            referencedRelation: 'sports'
+            referencedColumns: ['id']
+          },
+        ]
       }
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
-    Enums: Record<string, never>
+    Views: {
+      [_ in never]?: never
+    }
+    Functions: {
+      [_ in never]?: never
+    }
+    Enums: {
+      [_ in never]?: never
+    }
+    CompositeTypes: {
+      [_ in never]?: never
+    }
   }
 }
 
