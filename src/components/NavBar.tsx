@@ -35,6 +35,12 @@ export default async function NavBar() {
             CFB Hub
           </Link>
           <Link
+            href="/leaderboard"
+            className="text-sm font-medium text-zinc-600 hover:text-black transition-colors"
+          >
+            Leaderboard
+          </Link>
+          <Link
             href="/dashboard"
             className="text-sm font-medium text-zinc-600 hover:text-black transition-colors"
           >
@@ -50,7 +56,12 @@ export default async function NavBar() {
           )}
           <div className="flex items-center gap-3 pl-4 border-l border-zinc-200">
             {displayName && (
-              <span className="text-sm font-medium text-zinc-700">{displayName}</span>
+              <Link
+                href="/profile"
+                className="text-sm font-medium text-zinc-700 hover:text-black transition-colors"
+              >
+                {displayName}
+              </Link>
             )}
             <SignOutButton />
           </div>

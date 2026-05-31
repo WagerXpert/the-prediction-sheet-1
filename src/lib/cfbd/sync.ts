@@ -172,16 +172,16 @@ export async function syncSchedule(season = CURRENT_SEASON): Promise<SyncResult>
         sport_id: 'cfb',
         external_id: g.id,
         season: g.season,
-        season_type: g.season_type,
+        season_type: g.seasonType ?? 'regular',
         week: g.week,
-        game_date: g.start_date,
-        home_team_id: teamByName.get(g.home_team) ?? null,
-        away_team_id: teamByName.get(g.away_team) ?? null,
-        home_team_points: g.home_points,
-        away_team_points: g.away_points,
+        game_date: g.startDate,
+        home_team_id: teamByName.get(g.homeTeam) ?? null,
+        away_team_id: teamByName.get(g.awayTeam) ?? null,
+        home_team_points: g.homePoints,
+        away_team_points: g.awayPoints,
         status: g.completed ? GAME_STATUS.COMPLETED : GAME_STATUS.SCHEDULED,
-        neutral_site: g.neutral_site ?? false,
-        conference_game: g.conference_game ?? false,
+        neutral_site: g.neutralSite ?? false,
+        conference_game: g.conferenceGame ?? false,
         notes: g.notes,
       }
       if (gameByExtId.has(extId)) {
@@ -261,8 +261,8 @@ export async function syncResults(season = CURRENT_SEASON, week?: number): Promi
       const ourId = gameByExtId.get(String(g.id))
       if (!ourId) continue
       await db.from('games').update({
-        home_team_points: g.home_points,
-        away_team_points: g.away_points,
+        home_team_points: g.homePoints,
+        away_team_points: g.awayPoints,
         status: GAME_STATUS.COMPLETED,
       }).eq('id', ourId)
       updatedGames++

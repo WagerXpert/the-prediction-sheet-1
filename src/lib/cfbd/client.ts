@@ -42,15 +42,15 @@ export interface CfbdGame {
   id: number
   season: number
   week: number
-  season_type: string
-  start_date: string | null
-  home_team: string
-  away_team: string
-  home_points: number | null
-  away_points: number | null
+  seasonType: string
+  startDate: string | null
+  homeTeam: string
+  awayTeam: string
+  homePoints: number | null
+  awayPoints: number | null
   completed: boolean
-  neutral_site: boolean
-  conference_game: boolean | null
+  neutralSite: boolean
+  conferenceGame: boolean | null
   notes: string | null
 }
 
