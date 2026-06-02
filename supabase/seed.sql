@@ -10,8 +10,8 @@ INSERT INTO public.conferences (sport_id, external_id, name, abbreviation) VALUE
   ('cfb', 'B1G',  'Big Ten Conference',           'Big Ten'),
   ('cfb', 'B12',  'Big 12 Conference',            'Big 12'),
   ('cfb', 'ACC',  'Atlantic Coast Conference',    'ACC'),
-  ('cfb', 'AAC',  'American Athletic Conference', 'American Athletic'),
-  ('cfb', 'MWC',  'Mountain West Conference',     'Mountain West'),
+  ('cfb', 'AAC',  'American Athletic Conference', 'AAC'),
+  ('cfb', 'MWC',  'Mountain West Conference',     'MWC'),
   ('cfb', 'SBC',  'Sun Belt Conference',          'Sun Belt'),
   ('cfb', 'MAC',  'Mid-American Conference',      'MAC'),
   ('cfb', 'CUSA', 'Conference USA',               'CUSA')

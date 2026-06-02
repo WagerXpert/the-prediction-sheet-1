@@ -33,11 +33,15 @@ export async function syncTeams(season = CURRENT_SEASON): Promise<SyncResult> {
     // ---- Conferences -------------------------------------------------------
     const { data: existingConfs } = await db
       .from('conferences')
-      .select('id, external_id')
+      .select('id, external_id, name')
       .eq('sport_id', 'cfb')
 
     const confByExtId = new Map(
       existingConfs?.filter(c => c.external_id).map(c => [c.external_id!, c.id]) ?? []
+    )
+    // Also index by name so we can merge with existing seed rows instead of inserting duplicates
+    const confByName = new Map(
+      existingConfs?.map(c => [c.name, c.id]) ?? []
     )
 
     for (const c of relevantConfs) {
@@ -49,28 +53,38 @@ export async function syncTeams(season = CURRENT_SEASON): Promise<SyncResult> {
         abbreviation: c.abbreviation || c.short_name || c.name.slice(0, 12),
       }
       if (confByExtId.has(extId)) {
+        // Already linked by CFBD numeric id — just update
         await db.from('conferences').update(row).eq('id', confByExtId.get(extId)!)
+      } else if (confByName.has(c.name)) {
+        // A seed row with the same name exists — update it and claim the CFBD id (no new row)
+        const existingId = confByName.get(c.name)!
+        await db.from('conferences').update({ ...row, external_id: extId }).eq('id', existingId)
+        confByExtId.set(extId, existingId)
       } else {
         const { data } = await db.from('conferences').insert(row).select('id, external_id').single()
         if (data) confByExtId.set(extId, data.id)
       }
     }
 
-    // Refresh name → id map after inserts
+    // Refresh name → id map after upserts
     const { data: allConfs } = await db
       .from('conferences')
       .select('id, name')
       .eq('sport_id', 'cfb')
-    const confByName = new Map(allConfs?.map(c => [c.name, c.id]) ?? [])
+    const confByNameFinal = new Map(allConfs?.map(c => [c.name, c.id]) ?? [])
 
     // ---- Teams -------------------------------------------------------------
     const { data: existingTeams } = await db
       .from('teams')
-      .select('id, external_id')
+      .select('id, external_id, name')
       .eq('sport_id', 'cfb')
 
     const teamByExtId = new Map(
       existingTeams?.filter(t => t.external_id).map(t => [t.external_id!, t.id]) ?? []
+    )
+    // Index by name to merge with seed rows instead of inserting duplicates
+    const teamByName = new Map(
+      existingTeams?.map(t => [t.name, t.id]) ?? []
     )
 
     const toInsert: any[] = []
@@ -81,7 +95,7 @@ export async function syncTeams(season = CURRENT_SEASON): Promise<SyncResult> {
       const row = {
         sport_id: 'cfb',
         external_id: extId,
-        conference_id: t.conference ? confByName.get(t.conference) ?? null : null,
+        conference_id: t.conference ? confByNameFinal.get(t.conference) ?? null : null,
         name: t.school,
         abbreviation: t.abbreviation,
         mascot: t.mascot,
@@ -91,6 +105,10 @@ export async function syncTeams(season = CURRENT_SEASON): Promise<SyncResult> {
       }
       if (teamByExtId.has(extId)) {
         toUpdate.push({ id: teamByExtId.get(extId)!, row })
+      } else if (teamByName.has(t.school)) {
+        // Seed team with same name — update it with CFBD data (no new row)
+        toUpdate.push({ id: teamByName.get(t.school)!, row: { ...row, external_id: extId } })
+        teamByExtId.set(extId, teamByName.get(t.school)!)
       } else {
         toInsert.push(row as any)
       }

@@ -47,9 +47,17 @@ export default async function SeasonRecordsPage() {
               className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-zinc-200 hover:border-[#84cc16] hover:shadow-md transition-all bg-white text-center"
             >
               <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center group-hover:bg-[#84cc16]/10 transition-colors">
-                <span className="text-sm font-black text-zinc-600 group-hover:text-[#65a30d] transition-colors">
-                  {conf.abbreviation}
-                </span>
+                {conf.logo_url ? (
+                  <img
+                    src={conf.logo_url}
+                    alt={conf.abbreviation}
+                    className="w-12 h-12 object-contain"
+                  />
+                ) : (
+                  <span className="text-sm font-black text-zinc-600 group-hover:text-[#65a30d] transition-colors">
+                    {conf.abbreviation}
+                  </span>
+                )}
               </div>
               <div>
                 <p className="font-bold text-sm leading-tight">{conf.name}</p>

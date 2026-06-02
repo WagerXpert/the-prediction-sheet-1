@@ -32,6 +32,7 @@ create table if not exists public.conferences (
   external_id  text,                       -- CFBD conference abbreviation
   name         text not null,
   abbreviation text not null,
+  logo_url     text,
   created_at   timestamptz not null default now(),
   unique (sport_id, external_id)
 );

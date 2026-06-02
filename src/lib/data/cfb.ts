@@ -1,6 +1,30 @@
 import { createClient } from '@/lib/supabase/server'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 
+// Conference logos — verified ESPN CDN numeric IDs (screenshotted to confirm correct conference).
+// Keys cover both CFBD short names (after sync) and seed full names (before sync).
+const CONFERENCE_LOGO_MAP: Record<string, string> = {
+  // CFBD short names (what the DB stores after the admin Teams sync runs)
+  'SEC':               'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/8.png',
+  'Big Ten':           'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/5.png',
+  'Big 12':            'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/4.png',
+  'ACC':               'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/acc.png',
+  'American Athletic': 'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/151.png',
+  'Mountain West':     'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/17.png',
+  'Sun Belt':          'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/37.png',
+  'MAC':               'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/24.png',
+  'Conference USA':    'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/12.png',
+  // Seed full names (what the DB stores before the admin sync runs)
+  'Southeastern Conference':      'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/8.png',
+  'Big Ten Conference':           'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/5.png',
+  'Big 12 Conference':            'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/4.png',
+  'Atlantic Coast Conference':    'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/acc.png',
+  'American Athletic Conference': 'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/151.png',
+  'Mountain West Conference':     'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/17.png',
+  'Sun Belt Conference':          'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/37.png',
+  'Mid-American Conference':      'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/24.png',
+}
+
 export interface CfbTeam {
   id: string
   name: string
@@ -13,6 +37,7 @@ export interface CfbConference {
   id: string
   name: string
   abbreviation: string
+  logo_url: string | null
   teams: CfbTeam[]
 }
 
@@ -39,12 +64,15 @@ export async function getCfbConferencesWithTeams(): Promise<CfbConference[]> {
 
   if (!data) return []
 
-  return data.map((conf) => ({
-    id: conf.id,
-    name: conf.name,
-    abbreviation: conf.abbreviation,
-    teams: ((conf.teams ?? []) as CfbTeam[]).sort((a, b) => a.name.localeCompare(b.name)),
-  }))
+  return data
+    .map((conf) => ({
+      id: conf.id,
+      name: conf.name,
+      abbreviation: conf.abbreviation,
+      logo_url: CONFERENCE_LOGO_MAP[conf.name] ?? null,
+      teams: ((conf.teams ?? []) as CfbTeam[]).sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .filter((conf) => conf.teams.length > 0)
 }
 
 export async function getCfbConferenceById(id: string): Promise<CfbConference | null> {
@@ -62,6 +90,7 @@ export async function getCfbConferenceById(id: string): Promise<CfbConference | 
     id: data.id,
     name: data.name,
     abbreviation: data.abbreviation,
+    logo_url: CONFERENCE_LOGO_MAP[data.name] ?? null,
     teams: ((data.teams ?? []) as CfbTeam[]).sort((a, b) => a.name.localeCompare(b.name)),
   }
 }
