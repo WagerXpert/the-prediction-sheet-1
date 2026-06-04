@@ -42,6 +42,20 @@ export const MAJOR_CONFERENCES = [
   'Conference USA',
 ] as const
 
+/** Power conference name variants (CFBD short + seed full) */
+export const POWER_CONF_NAMES = new Set([
+  'SEC', 'Big Ten', 'Big 12', 'ACC', 'Pac-12',
+  'Southeastern Conference', 'Big Ten Conference', 'Big 12 Conference',
+  'Atlantic Coast Conference', 'Pac-12 Conference',
+])
+
+/** Group of Five conference name variants */
+export const G5_CONF_NAMES = new Set([
+  'American Athletic', 'Mountain West', 'Sun Belt', 'MAC', 'Conference USA', 'Mid-American',
+  'American Athletic Conference', 'Mountain West Conference', 'Sun Belt Conference',
+  'Mid-American Conference',
+])
+
 /** App brand colors */
 export const BRAND = {
   lime: '#84cc16',

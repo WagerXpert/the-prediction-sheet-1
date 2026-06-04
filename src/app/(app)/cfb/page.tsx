@@ -18,6 +18,31 @@ export default async function CFBHubPage() {
         <p className="text-zinc-500 mt-1">Your home for college football predictions.</p>
       </div>
 
+      {/* Full Season Mode — featured card */}
+      <Link
+        href="/cfb/full-season"
+        className="flex flex-col sm:flex-row items-start sm:items-center gap-5 p-6 mb-5 rounded-2xl bg-black text-white hover:bg-zinc-900 transition-all group"
+      >
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-bold tracking-[0.2em] uppercase text-[#84cc16]">
+              Featured
+            </span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#84cc16] text-black">
+              New
+            </span>
+          </div>
+          <h3 className="text-2xl font-black">Full Season Mode</h3>
+          <p className="text-zinc-400 text-sm mt-1 leading-relaxed max-w-lg">
+            Select your conferences and predict the outcome of every game for every team.
+            One pick updates every schedule, record, and standing automatically.
+          </p>
+        </div>
+        <span className="text-[#84cc16] text-2xl font-black group-hover:translate-x-1 transition-transform shrink-0">
+          →
+        </span>
+      </Link>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-12">
         {[
           {

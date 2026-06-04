@@ -12,8 +12,13 @@ const CONFERENCE_LOGO_MAP: Record<string, string> = {
   'American Athletic': 'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/151.png',
   'Mountain West':     'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/17.png',
   'Sun Belt':          'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/37.png',
-  'MAC':               'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/24.png',
+  'MAC':               'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/mac.png',
+  'Mid-American':      'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/mac.png',
   'Conference USA':    'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/12.png',
+  'Pac-12':            'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/9.png',
+  'FBS Independents':  'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/18.png',
+  'Independent':       'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/18.png',
+  'Independents':      'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/18.png',
   // Seed full names (what the DB stores before the admin sync runs)
   'Southeastern Conference':      'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/8.png',
   'Big Ten Conference':           'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/5.png',
@@ -22,7 +27,12 @@ const CONFERENCE_LOGO_MAP: Record<string, string> = {
   'American Athletic Conference': 'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/151.png',
   'Mountain West Conference':     'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/17.png',
   'Sun Belt Conference':          'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/37.png',
-  'Mid-American Conference':      'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/24.png',
+  'Mid-American Conference':      'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/mac.png',
+  'Pac-12 Conference':            'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/9.png',
+}
+
+export function getConferenceLogo(name: string): string | null {
+  return CONFERENCE_LOGO_MAP[name] ?? null
 }
 
 export interface CfbTeam {

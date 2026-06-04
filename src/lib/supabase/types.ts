@@ -344,6 +344,107 @@ export interface Database {
           },
         ]
       }
+      full_season_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          sport_id: string
+          season: number
+          name: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          sport_id: string
+          season: number
+          name?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['full_season_sessions']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'fss_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fss_sport_id_fkey'
+            columns: ['sport_id']
+            isOneToOne: false
+            referencedRelation: 'sports'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      full_season_conferences: {
+        Row: {
+          session_id: string
+          conference_id: string
+        }
+        Insert: {
+          session_id: string
+          conference_id: string
+        }
+        Update: Partial<Database['public']['Tables']['full_season_conferences']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'fsc_session_id_fkey'
+            columns: ['session_id']
+            isOneToOne: false
+            referencedRelation: 'full_season_sessions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fsc_conference_id_fkey'
+            columns: ['conference_id']
+            isOneToOne: false
+            referencedRelation: 'conferences'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      full_season_predictions: {
+        Row: {
+          id: string
+          session_id: string
+          game_id: string
+          winner_team_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          session_id: string
+          game_id: string
+          winner_team_id: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['full_season_predictions']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'fsp_session_id_fkey'
+            columns: ['session_id']
+            isOneToOne: false
+            referencedRelation: 'full_season_sessions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fsp_game_id_fkey'
+            columns: ['game_id']
+            isOneToOne: false
+            referencedRelation: 'games'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fsp_winner_team_id_fkey'
+            columns: ['winner_team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       sync_log: {
         Row: {
           id: string

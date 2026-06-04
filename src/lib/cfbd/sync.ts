@@ -167,9 +167,63 @@ export async function syncSchedule(season = CURRENT_SEASON): Promise<SyncResult>
     // Build team name → id map
     const { data: teams } = await db
       .from('teams')
-      .select('id, name')
+      .select('id, name, external_id')
       .eq('sport_id', 'cfb')
     const teamByName = new Map(teams?.map(t => [t.name, t.id]) ?? [])
+    const teamByExtId_sched = new Map(
+      teams?.filter(t => t.external_id).map(t => [t.external_id!, t.id]) ?? []
+    )
+
+    // Create stub records for FCS opponents not already in the DB
+    const scheduledSchools = new Set([
+      ...allGames.map(g => g.homeTeam),
+      ...allGames.map(g => g.awayTeam),
+    ])
+    const missingSchools = [...scheduledSchools].filter(name => name && !teamByName.has(name))
+
+    if (missingSchools.length > 0) {
+      const cfbdAllTeams = await cfbd.teams(season)
+      const cfbdBySchool = new Map(cfbdAllTeams.map(t => [t.school, t]))
+
+      for (const school of missingSchools) {
+        const t = cfbdBySchool.get(school)
+        const extId = t ? String(t.id) : null
+
+        // Skip if we already have a team with this external_id (e.g. from a prior sync)
+        if (extId && teamByExtId_sched.has(extId)) {
+          teamByName.set(school, teamByExtId_sched.get(extId)!)
+          continue
+        }
+
+        const row = {
+          sport_id: 'cfb',
+          external_id: extId,
+          conference_id: null as string | null,
+          name: school,
+          abbreviation: t?.abbreviation ?? null,
+          mascot: t?.mascot ?? null,
+          logo_url: t?.logos?.[0] ?? null,
+          color: t?.color ?? null,
+          alt_color: t?.alt_color ?? null,
+        }
+
+        if (extId) {
+          const { data } = await db
+            .from('teams')
+            .upsert(row, { onConflict: 'sport_id,external_id' })
+            .select('id, name')
+            .single()
+          if (data) teamByName.set(data.name, data.id)
+        } else {
+          const { data } = await db
+            .from('teams')
+            .insert(row)
+            .select('id, name')
+            .maybeSingle()
+          if (data) teamByName.set(data.name, data.id)
+        }
+      }
+    }
 
     // Build existing external_id → game id map
     const { data: existingGames } = await db
