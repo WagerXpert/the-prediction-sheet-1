@@ -480,8 +480,8 @@ export interface Database {
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database['public']['Tables']['cfp_brackets']['Row'], 'id' | 'created_at'>
-        Update: Partial<Database['public']['Tables']['cfp_brackets']['Insert']>
+        Insert: Omit<Database['public']['Tables']['cfp_brackets']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Database['public']['Tables']['cfp_brackets']['Row'], 'id' | 'created_at'>>
         Relationships: [
           {
             foreignKeyName: 'cfpb_session_id_fkey'
@@ -517,6 +517,47 @@ export interface Database {
             columns: ['winner_team_id']
             isOneToOne: false
             referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      cfp_conf_champ_games: {
+        Row: {
+          id: string
+          bracket_id: string
+          conference_id: string
+          conference_name: string
+          conference_abbr: string
+          team_a_id: string | null
+          team_b_id: string | null
+          team_a_name: string
+          team_b_name: string
+          team_a_abbr: string | null
+          team_b_abbr: string | null
+          team_a_logo: string | null
+          team_b_logo: string | null
+          team_a_color: string | null
+          team_b_color: string | null
+          team_a_wins: number
+          team_a_losses: number
+          team_b_wins: number
+          team_b_losses: number
+          team_a_conf_wins: number
+          team_a_conf_losses: number
+          team_b_conf_wins: number
+          team_b_conf_losses: number
+          winner_team_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['cfp_conf_champ_games']['Row'], 'id' | 'created_at'>
+        Update: Partial<Omit<Database['public']['Tables']['cfp_conf_champ_games']['Row'], 'id' | 'created_at'>>
+        Relationships: [
+          {
+            foreignKeyName: 'cfp_cchamp_bracket_fkey'
+            columns: ['bracket_id']
+            isOneToOne: false
+            referencedRelation: 'cfp_brackets'
             referencedColumns: ['id']
           },
         ]

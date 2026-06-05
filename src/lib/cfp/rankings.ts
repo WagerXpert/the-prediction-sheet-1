@@ -1,5 +1,10 @@
-// Pure ranking algorithm — no server imports, runs in both environments.
-// Approximates CFP Committee logic from predicted season results.
+// CFP ranking algorithm — pure function, runs in both server and client environments.
+// Models how the real CFP Committee evaluates teams:
+//   - Power 4 conference championships are the most valuable accomplishment
+//   - SOS weighted by opponent conference prestige (P4 > G5 > Independent)
+//   - Quality wins weighted by opponent strength and conference prestige
+//   - Notre Dame and other independents treated as premium at-large candidates
+//   - G5 champions can earn auto bids but realistically rank below P4 champions
 
 export interface TeamData {
   id: string
@@ -46,29 +51,45 @@ export interface RankingInput {
   results: Record<string, TeamGameResult[]>
 }
 
-const POWER_4 = new Set([
-  'SEC', 'Big Ten', 'Big 12', 'ACC', 'Pac-12',
-  'Southeastern Conference', 'Big Ten Conference',
-  'Big 12 Conference', 'Atlantic Coast Conference', 'Pac-12 Conference',
-])
-const G5 = new Set([
-  'American Athletic', 'Mountain West', 'Sun Belt', 'MAC', 'Conference USA', 'Mid-American',
-  'American Athletic Conference', 'Mountain West Conference', 'Sun Belt Conference',
-  'Mid-American Conference',
-])
+// ── Conference prestige (0–100) ───────────────────────────────────
 
-function confPrestige(name: string): number {
-  if (POWER_4.has(name)) return 10
-  if (G5.has(name)) return 5
-  return 2
+const PRESTIGE_TABLE: [RegExp, number][] = [
+  [/SEC|Southeastern/i, 100],
+  [/Big Ten/i, 95],
+  [/ACC|Atlantic Coast/i, 78],
+  [/Big 12/i, 78],
+  [/Pac.?12/i, 72],
+  [/Mountain West/i, 55],
+  [/American Athletic/i, 52],
+  [/Sun Belt/i, 46],
+  [/Mid.?American|^MAC$/i, 42],
+  [/Conference USA|CUSA/i, 40],
+]
+
+function getPrestige(confName: string): number {
+  if (!confName || /independent/i.test(confName)) return 65
+  for (const [re, score] of PRESTIGE_TABLE) {
+    if (re.test(confName)) return score
+  }
+  return 35
 }
+
+function isP4(name: string) { return /SEC|Southeastern|Big Ten|ACC|Atlantic Coast|Big 12|Pac.?12/i.test(name) }
+function isG5(name: string) { return /Mountain West|American Athletic|Sun Belt|Mid.?American|^MAC$|Conference USA|CUSA/i.test(name) }
+function isIndependent(name: string) { return /independent/i.test(name) || !name }
+
+// ── Core algorithm ────────────────────────────────────────────────
 
 export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
   const { teams, results } = input
 
+  // Filter to teams that have played at least 1 game (predicted or actual)
+  const activeTeams = teams.filter(t => (results[t.id]?.length ?? 0) > 0)
+  if (!activeTeams.length) return []
+
   // Step 1: raw records
   const records = new Map<string, { wins: number; losses: number; confWins: number; confLosses: number }>()
-  for (const t of teams) {
+  for (const t of activeTeams) {
     const games = results[t.id] ?? []
     let wins = 0, losses = 0, confWins = 0, confLosses = 0
     for (const g of games) {
@@ -78,10 +99,13 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
     records.set(t.id, { wins, losses, confWins, confLosses })
   }
 
-  // Step 2: conference champions (best conf record, tiebreak overall)
+  // Build teamData lookup by id
+  const teamById = new Map(activeTeams.map(t => [t.id, t]))
+
+  // Step 2: conference champions — best conf record; tiebreak overall
   const confChampions = new Map<string, string>()
   const byConf = new Map<string, TeamData[]>()
-  for (const t of teams) {
+  for (const t of activeTeams) {
     const list = byConf.get(t.conference_id) ?? []
     list.push(t)
     byConf.set(t.conference_id, list)
@@ -90,11 +114,11 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
     const sorted = [...confTeams].sort((a, b) => {
       const ra = records.get(a.id)!
       const rb = records.get(b.id)!
-      const confTotalA = ra.confWins + ra.confLosses
-      const confTotalB = rb.confWins + rb.confLosses
-      const confPctA = confTotalA > 0 ? ra.confWins / confTotalA : 0
-      const confPctB = confTotalB > 0 ? rb.confWins / confTotalB : 0
-      if (confPctB !== confPctA) return confPctB - confPctA
+      const ctA = ra.confWins + ra.confLosses
+      const ctB = rb.confWins + rb.confLosses
+      const cpA = ctA > 0 ? ra.confWins / ctA : 0
+      const cpB = ctB > 0 ? rb.confWins / ctB : 0
+      if (cpB !== cpA) return cpB - cpA
       const ovA = ra.wins + ra.losses > 0 ? ra.wins / (ra.wins + ra.losses) : 0
       const ovB = rb.wins + rb.losses > 0 ? rb.wins / (rb.wins + rb.losses) : 0
       return ovB - ovA
@@ -102,74 +126,87 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
     if (sorted.length > 0) confChampions.set(confId, sorted[0].id)
   }
 
-  // Step 3: strength of schedule — avg opponent win pct
+  // Step 3: SOS — sum of (opponent win% × opponent conf prestige) per game, normalized
   const sosByTeam = new Map<string, number>()
-  for (const t of teams) {
+  for (const t of activeTeams) {
     const games = results[t.id] ?? []
     if (!games.length) { sosByTeam.set(t.id, 0); continue }
     let total = 0
     for (const g of games) {
       const opp = records.get(g.opponent_id)
-      if (opp) {
+      const oppTeam = teamById.get(g.opponent_id)
+      if (opp && oppTeam) {
         const oppTotal = opp.wins + opp.losses
-        total += oppTotal > 0 ? opp.wins / oppTotal : 0
+        const oppWinPct = oppTotal > 0 ? opp.wins / oppTotal : 0
+        const oppPrestige = getPrestige(oppTeam.conference_name) / 100
+        total += oppWinPct * oppPrestige
       }
     }
     sosByTeam.set(t.id, total / games.length)
   }
 
-  // Step 4: quality wins (wins vs opponents with 7+ wins)
+  // Step 4: quality wins — wins vs 6+ win teams, weighted by opp conf prestige
   const qualityWinsByTeam = new Map<string, number>()
-  for (const t of teams) {
+  for (const t of activeTeams) {
     const games = results[t.id] ?? []
-    const qw = games.filter(g => {
-      if (!g.won) return false
+    let score = 0
+    for (const g of games) {
+      if (!g.won) continue
       const opp = records.get(g.opponent_id)
-      return opp && opp.wins >= 7
-    }).length
-    qualityWinsByTeam.set(t.id, qw)
+      const oppTeam = teamById.get(g.opponent_id)
+      if (!opp || !oppTeam || opp.wins < 6) continue
+      const oppPrestige = getPrestige(oppTeam.conference_name) / 100
+      const winValue = (opp.wins >= 8 ? 1.5 : 1.0) * (0.4 + oppPrestige * 0.6)
+      score += winValue
+    }
+    qualityWinsByTeam.set(t.id, Math.min(score, 12))
   }
 
-  // Step 5: normalize
+  // Normalize SOS
   const sosVals = [...sosByTeam.values()]
   const maxSos = Math.max(...sosVals, 0.001)
   const minSos = Math.min(...sosVals, 0)
-  const maxQw = Math.max(...qualityWinsByTeam.values(), 1)
 
-  // Step 6: score
-  const scored = teams.map(t => {
+  // Step 5: score
+  const scored = activeTeams.map(t => {
     const rec = records.get(t.id)!
-    const isChamp = confChampions.get(t.conference_id) === t.id
+    const isChamp = confChampions.get(t.conference_id) === t.id && !isIndependent(t.conference_name)
     const total = rec.wins + rec.losses
     const winPct = total > 0 ? rec.wins / total : 0
     const sos = sosByTeam.get(t.id) ?? 0
     const qw = qualityWinsByTeam.get(t.id) ?? 0
     const sosNorm = maxSos > minSos ? (sos - minSos) / (maxSos - minSos) : 0
-    const qwNorm = maxQw > 0 ? qw / maxQw : 0
-    const prestige = confPrestige(t.conference_name)
+    const prestige = getPrestige(t.conference_name)
+
+    // Conference champion bonus — biggest reward for winning a Power 4 conference
+    const champBonus = isChamp
+      ? (isP4(t.conference_name) ? 20 : isG5(t.conference_name) ? 8 : 0)
+      : 0
+
+    // Independents (Notre Dame) get a prestige floor as premium at-large candidates
+    // Their tough schedules are captured in SOS; they don't get conf champ bonus
+    const confBackground = (prestige / 100) * 8
 
     const score =
-      winPct * 45 +
-      (isChamp ? 15 : 0) +
-      sosNorm * 20 +
-      qwNorm * 10 +
-      (prestige / 10) * 10
+      winPct * 55 +    // 0-55: win% is primary factor
+      champBonus +     // P4: +20, G5: +8, none: 0
+      sosNorm * 20 +   // 0-20: SOS weighted by opp conf prestige
+      qw +             // 0-12: quality wins
+      confBackground   // 0-8: conference prestige background
 
-    return { t, rec, isChamp, winPct, sos, sosNorm, qw, score }
+    return { t, rec, isChamp, winPct, sos, qw, sosNorm, score }
   })
 
+  // Sort by score, tiebreak wins
   scored.sort((a, b) => b.score !== a.score ? b.score - a.score : b.rec.wins - a.rec.wins)
 
-  // Step 7: mark auto bids (top 5 ranked conf champs)
+  // Mark auto bids (top 5 ranked conf champs, one per conference)
   const autoBidConfs = new Set<string>()
   return scored.map((s, i) => {
-    const isAutoBid = s.isChamp && autoBidConfs.size < 5 && (() => {
-      if (!autoBidConfs.has(s.t.conference_id)) {
-        autoBidConfs.add(s.t.conference_id)
-        return true
-      }
-      return false
-    })()
+    const isBidEligible = s.isChamp && !autoBidConfs.has(s.t.conference_id)
+    const isAutoBid = isBidEligible && autoBidConfs.size < 5
+      ? (autoBidConfs.add(s.t.conference_id), true)
+      : false
 
     return {
       rank: i + 1,
@@ -186,11 +223,11 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
       conf_wins: s.rec.confWins,
       conf_losses: s.rec.confLosses,
       is_conf_champ: s.isChamp,
-      is_auto_bid: isAutoBid ?? false,
+      is_auto_bid: isAutoBid,
       cfp_score: Math.round(s.score * 10) / 10,
       win_pct: Math.round(s.winPct * 1000) / 1000,
       sos_pct: Math.round(s.sos * 1000) / 1000,
-      quality_wins: s.qw,
+      quality_wins: Math.round(s.qw * 10) / 10,
     }
   })
 }

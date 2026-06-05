@@ -2,39 +2,44 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { regenerateCFPBracket, saveCFPBracketCustom } from '@/lib/data/cfp'
+import { saveCFPBracketCustom, saveConfChampPick, computeAndSaveBracketSeedings, resetCFPSession } from '@/lib/data/cfp'
 import type { CFPSeed, CFPRankedTeam } from '@/lib/data/cfp'
 
-export async function regenerateBracketAction(sessionId: string): Promise<void> {
+// ── Conf champ picks ──────────────────────────────────────────────
+
+export async function saveConfChampPickAction(gameId: string, winnerTeamId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-  await regenerateCFPBracket(sessionId)
+  await saveConfChampPick(gameId, winnerTeamId)
+}
+
+// ── Generate rankings + seedings after conf champs ────────────────
+
+export async function generateBracketSeedingsAction(sessionId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  await computeAndSaveBracketSeedings(sessionId)
   revalidatePath('/cfb/full-season/cfp')
 }
 
-export async function saveCustomBracketAction(
-  bracketId: string,
-  seedings: CFPSeed[],
-  rankings: CFPRankedTeam[]
-): Promise<void> {
+// ── Reset entire CFP session (clear bracket + conf champs) ─────────
+
+export async function resetBracketAction(sessionId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-  await saveCFPBracketCustom(bracketId, seedings, rankings)
+  await resetCFPSession(sessionId)
   revalidatePath('/cfb/full-season/cfp')
 }
 
-export async function saveCFPPickAction(
-  bracketId: string,
-  round: number,
-  gameIndex: number,
-  winnerTeamId: string
-): Promise<void> {
+// ── Bracket game picks ────────────────────────────────────────────
+
+export async function saveCFPPickAction(bracketId: string, round: number, gameIndex: number, winnerTeamId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-
   await supabase
     .from('cfp_picks')
     .upsert(
@@ -44,11 +49,9 @@ export async function saveCFPPickAction(
 }
 
 export async function clearCFPPicksAction(bracketId: string, keys: string[]): Promise<void> {
-  // keys are "round-gameIndex" strings
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-
   for (const key of keys) {
     const [round, gameIndex] = key.split('-').map(Number)
     await supabase
@@ -58,4 +61,24 @@ export async function clearCFPPicksAction(bracketId: string, keys: string[]): Pr
       .eq('round', round)
       .eq('game_index', gameIndex)
   }
+}
+
+// ── Customize bracket seedings ────────────────────────────────────
+
+export async function saveCustomBracketAction(bracketId: string, seedings: CFPSeed[], rankings: CFPRankedTeam[]): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  await saveCFPBracketCustom(bracketId, seedings, rankings)
+  revalidatePath('/cfb/full-season/cfp')
+}
+
+// ── Re-generate after customization (clear picks too) ────────────
+
+export async function regenerateBracketAction(sessionId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  await resetCFPSession(sessionId)
+  revalidatePath('/cfb/full-season/cfp')
 }
