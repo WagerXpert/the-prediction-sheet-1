@@ -469,6 +469,58 @@ export interface Database {
           },
         ]
       }
+      cfp_brackets: {
+        Row: {
+          id: string
+          session_id: string
+          season: number
+          seedings: Json
+          cfp_rankings: Json
+          is_customized: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['cfp_brackets']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['cfp_brackets']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'cfpb_session_id_fkey'
+            columns: ['session_id']
+            isOneToOne: true
+            referencedRelation: 'full_season_sessions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      cfp_picks: {
+        Row: {
+          id: string
+          bracket_id: string
+          round: number
+          game_index: number
+          winner_team_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['cfp_picks']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['cfp_picks']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'cfpp_bracket_id_fkey'
+            columns: ['bracket_id']
+            isOneToOne: false
+            referencedRelation: 'cfp_brackets'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'cfpp_winner_team_id_fkey'
+            columns: ['winner_team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]?: never

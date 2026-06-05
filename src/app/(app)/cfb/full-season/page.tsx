@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getSession, getSessionDashboard } from '@/lib/data/full-season'
+import { getSession, getSessionDashboard, getSessionProgress } from '@/lib/data/full-season'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 import FullSeasonActions from './FullSeasonActions'
 import type { Metadata } from 'next'
@@ -16,7 +16,10 @@ export default async function FullSeasonPage() {
   const session = await getSession(user.id)
   if (!session) redirect('/cfb/full-season/setup')
 
-  const conferences = await getSessionDashboard(session.id)
+  const [conferences, progress] = await Promise.all([
+    getSessionDashboard(session.id),
+    getSessionProgress(session.id),
+  ])
   if (conferences.length === 0) redirect('/cfb/full-season/setup')
 
   return (
@@ -121,6 +124,58 @@ export default async function FullSeasonPage() {
           )
         })}
       </div>
+
+      {/* CFP Bracket call-to-action */}
+      {progress.games_predicted > 0 && (
+        <div className="mt-12">
+          <div className={`rounded-2xl border-2 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5 ${
+            progress.games_predicted === progress.games_total
+              ? 'border-[#84cc16] bg-gradient-to-br from-[#84cc16]/10 to-transparent'
+              : 'border-zinc-200 bg-zinc-50'
+          }`}>
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-bold tracking-[0.2em] uppercase mb-1 ${
+                progress.games_predicted === progress.games_total ? 'text-[#65a30d]' : 'text-zinc-400'
+              }`}>
+                College Football Playoff
+              </p>
+              <h3 className="text-xl font-black">
+                {progress.games_predicted === progress.games_total
+                  ? 'Your CFP Bracket is Ready'
+                  : 'CFP Bracket — Partial'}
+              </h3>
+              <p className="text-sm text-zinc-500 mt-1">
+                {progress.games_predicted === progress.games_total
+                  ? 'All predictions complete. View your generated 12-team bracket and pick the champion.'
+                  : `${progress.games_predicted} of ${progress.games_total} games predicted. You can generate a bracket now or finish predictions first.`}
+              </p>
+              {progress.games_total > 0 && (
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="flex-1 h-1.5 bg-zinc-200 rounded-full overflow-hidden max-w-xs">
+                    <div
+                      className="h-full bg-[#84cc16] rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (progress.games_predicted / progress.games_total) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-500 shrink-0">
+                    {Math.round((progress.games_predicted / progress.games_total) * 100)}% complete
+                  </span>
+                </div>
+              )}
+            </div>
+            <Link
+              href="/cfb/full-season/cfp"
+              className={`shrink-0 inline-block font-bold px-6 py-3 rounded-xl transition-colors text-sm ${
+                progress.games_predicted === progress.games_total
+                  ? 'bg-[#84cc16] text-black hover:bg-[#65a30d]'
+                  : 'bg-white border border-zinc-300 text-black hover:border-zinc-400'
+              }`}
+            >
+              {progress.games_predicted === progress.games_total ? 'View CFP Bracket' : 'Preview CFP Bracket'}
+            </Link>
+          </div>
+        </div>
+      )}
 
     </div>
   )
