@@ -186,6 +186,36 @@ async function fetchAllFBSData(sessionId: string, season: number, simSeed: strin
     ratingByTeamId.set(id, getTeamRating(team.name))
   }
 
+  // Blend preseason ratings with actual in-season performance.
+  // As more real games are played, a team's actual win% shifts their
+  // effective simulation rating — a 12-0 team beats their preseason floor;
+  // a highly-rated team going 2-6 gets dialed down.
+  {
+    const wins = new Map<string, number>()
+    const losses = new Map<string, number>()
+    for (const g of gamesRes.data ?? []) {
+      if (g.status !== 'completed' || g.home_team_points === null || g.away_team_points === null) continue
+      if (!g.home_team_id || !g.away_team_id) continue
+      const homeWon = (g.home_team_points as number) > (g.away_team_points as number)
+      wins.set(g.home_team_id,  (wins.get(g.home_team_id)  ?? 0) + (homeWon ? 1 : 0))
+      losses.set(g.home_team_id,(losses.get(g.home_team_id)?? 0) + (homeWon ? 0 : 1))
+      wins.set(g.away_team_id,  (wins.get(g.away_team_id)  ?? 0) + (homeWon ? 0 : 1))
+      losses.set(g.away_team_id,(losses.get(g.away_team_id)?? 0) + (homeWon ? 1 : 0))
+    }
+    for (const [id, preseason] of ratingByTeamId) {
+      const w = wins.get(id) ?? 0
+      const l = losses.get(id) ?? 0
+      const n = w + l
+      if (n < 2) continue  // not enough games to meaningfully adjust
+      const winPct = w / n
+      // 0% → 30, 50% → 62.5, 100% → 95
+      const perfRating = 30 + winPct * 65
+      // Blend weight grows to max 40% at 10+ games (preseason always ≥60%)
+      const blendW = Math.min(n, 10) / 25
+      ratingByTeamId.set(id, Math.max(30, Math.min(99, Math.round(preseason * (1 - blendW) + perfRating * blendW))))
+    }
+  }
+
   // Priority: actual result > user pick > simulation
   function getEffectiveWinner(
     gameId: string,
