@@ -518,6 +518,7 @@ export default function CFPBracketClient({ bracket, initialPicks, sessionId }: P
   type View = 'bracket' | 'rankings' | 'customize'
   const [view, setView] = useState<View>('bracket')
   const [isPending, startTransition] = useTransition()
+  const [isRegenerating, setIsRegenerating] = useState(false)
 
   const [picks, setPicks] = useState<Map<string, string>>(() => {
     const m = new Map<string, string>()
@@ -563,11 +564,18 @@ export default function CFPBracketClient({ bracket, initialPicks, sessionId }: P
     })
   }
 
-  function handleRegenerate() {
-    startTransition(async () => {
-      await regenerateBracketAction(sessionId)
-      // Page refreshes via revalidatePath in the action
-    })
+  async function handleRegenerate() {
+    setIsRegenerating(true)
+    try {
+      const result = await regenerateBracketAction(sessionId)
+      // Update local state directly — don't rely on router.refresh() to reset useState
+      setCurrentSeedings(result.seedings)
+      setCurrentRankings(result.cfp_rankings)
+      setPicks(new Map())
+      setView('bracket')
+    } finally {
+      setIsRegenerating(false)
+    }
   }
 
   function handleSaveCustom(newRankings: CFPRankedTeam[]) {
@@ -635,10 +643,10 @@ export default function CFPBracketClient({ bracket, initialPicks, sessionId }: P
             </button>
             <button
               onClick={handleRegenerate}
-              disabled={isPending}
+              disabled={isRegenerating || isPending}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-300 hover:border-zinc-400 transition-colors disabled:opacity-50"
             >
-              {isPending ? 'Regenerating…' : 'Regenerate'}
+              {isRegenerating ? 'Regenerating…' : 'Regenerate'}
             </button>
           </div>
         </div>

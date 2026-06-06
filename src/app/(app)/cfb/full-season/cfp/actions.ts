@@ -74,21 +74,26 @@ export async function saveCustomBracketAction(bracketId: string, seedings: CFPSe
 }
 
 // ── Re-generate from latest predictions (preserves conf champ picks) ─
+// Returns new seedings + rankings so the client can update local state immediately
 
-export async function regenerateBracketAction(sessionId: string): Promise<void> {
+export async function regenerateBracketAction(
+  sessionId: string
+): Promise<{ seedings: CFPSeed[]; cfp_rankings: CFPRankedTeam[] }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Clear bracket game picks — teams may shift positions after recompute
+  // Clear bracket game picks — teams shift positions after recompute
   const bracket = await getCFPBracket(sessionId)
   if (bracket) {
     await supabase.from('cfp_picks').delete().eq('bracket_id', bracket.id)
   }
 
-  // Fresh random seed so the re-simulation produces genuinely different results
+  // Fresh random seed → genuinely different simulation each time
   const newSimSeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 
-  await computeAndSaveBracketSeedings(sessionId, undefined, newSimSeed)
+  const newBracket = await computeAndSaveBracketSeedings(sessionId, undefined, newSimSeed)
   revalidatePath('/cfb/full-season/cfp')
+
+  return { seedings: newBracket.seedings, cfp_rankings: newBracket.cfp_rankings }
 }
