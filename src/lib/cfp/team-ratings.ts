@@ -53,8 +53,8 @@ export const TEAM_RATINGS: Record<string, number> = {
   'Northwestern':         59,
 
   // ── ACC ─────────────────────────────────────────────────────────
-  'Clemson':              91,
-  'Miami':                88,
+  'Clemson':              84,
+  'Miami':                93,
   'Florida State':        86,
   'Louisville':           78,
   'SMU':                  76,
@@ -87,7 +87,7 @@ export const TEAM_RATINGS: Record<string, number> = {
   'Houston':              70,
   'Arizona':              63,
   'Kansas':               65,
-  'Cincinnati':           73,
+  'Cincinnati':           65,
 
   // ── American Athletic ───────────────────────────────────────────
   'Tulane':               74,

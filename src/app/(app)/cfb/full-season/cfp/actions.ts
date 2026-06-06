@@ -80,13 +80,15 @@ export async function regenerateBracketAction(sessionId: string): Promise<void> 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Clear bracket game picks since teams may shift positions after recompute
+  // Clear bracket game picks — teams may shift positions after recompute
   const bracket = await getCFPBracket(sessionId)
   if (bracket) {
     await supabase.from('cfp_picks').delete().eq('bracket_id', bracket.id)
   }
 
-  // Recompute seedings from current predictions + existing conf champ picks
-  await computeAndSaveBracketSeedings(sessionId)
+  // Fresh random seed so the re-simulation produces genuinely different results
+  const newSimSeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+
+  await computeAndSaveBracketSeedings(sessionId, undefined, newSimSeed)
   revalidatePath('/cfb/full-season/cfp')
 }

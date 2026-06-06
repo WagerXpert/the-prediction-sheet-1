@@ -18,6 +18,7 @@ export interface CFPBracket {
   seedings: CFPSeed[]
   cfp_rankings: CFPRankedTeam[]
   is_customized: boolean
+  sim_seed: string
 }
 
 export interface CFPPick {
@@ -61,26 +62,32 @@ export async function getCFPBracket(sessionId: string): Promise<CFPBracket | nul
   const supabase = await createClient()
   const { data } = await supabase
     .from('cfp_brackets')
-    .select('id, session_id, season, seedings, cfp_rankings, is_customized')
+    .select('id, session_id, season, seedings, cfp_rankings, is_customized, sim_seed')
     .eq('session_id', sessionId)
     .maybeSingle()
   if (!data) return null
   return {
     ...data,
+    sim_seed: (data as any).sim_seed ?? '',
     seedings: data.seedings as unknown as CFPSeed[],
     cfp_rankings: data.cfp_rankings as unknown as CFPRankedTeam[],
   }
 }
 
+function randomSeed(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
 async function createEmptyBracket(sessionId: string, season: number): Promise<CFPBracket> {
   const supabase = await createClient()
+  const sim_seed = randomSeed()
   const { data } = await supabase
     .from('cfp_brackets')
-    .insert({ session_id: sessionId, season, seedings: [] as unknown as Json, cfp_rankings: [] as unknown as Json, is_customized: false })
-    .select('id, session_id, season, seedings, cfp_rankings, is_customized')
+    .insert({ session_id: sessionId, season, seedings: [] as unknown as Json, cfp_rankings: [] as unknown as Json, is_customized: false, sim_seed })
+    .select('id, session_id, season, seedings, cfp_rankings, is_customized, sim_seed')
     .single()
   if (!data) throw new Error('Failed to create bracket')
-  return { ...data, seedings: [], cfp_rankings: [] }
+  return { ...data, sim_seed: (data as any).sim_seed ?? sim_seed, seedings: [], cfp_rankings: [] }
 }
 
 // ── Conference championship game helpers ──────────────────────────
@@ -127,7 +134,7 @@ interface AllFBSData {
   getEffectiveWinner: (gameId: string, homeId: string | null, awayId: string | null, status: string, homePoints: number | null, awayPoints: number | null, neutralSite?: boolean) => string | null
 }
 
-async function fetchAllFBSData(sessionId: string, season: number): Promise<AllFBSData> {
+async function fetchAllFBSData(sessionId: string, season: number, simSeed: string): Promise<AllFBSData> {
   const supabase = await createClient()
 
   const [confsRes, gamesRes, predsRes] = await Promise.all([
@@ -200,7 +207,7 @@ async function fetchAllFBSData(sessionId: string, season: number): Promise<AllFB
     if (!homeId || !awayId) return null
     const homeRating = ratingByTeamId.get(homeId) ?? DEFAULT_RATING
     const awayRating = ratingByTeamId.get(awayId) ?? DEFAULT_RATING
-    return simulateGame(sessionId, gameId, homeId, awayId, homeRating, awayRating, neutralSite)
+    return simulateGame(simSeed, gameId, homeId, awayId, homeRating, awayRating, neutralSite)
   }
 
   return {
@@ -364,7 +371,7 @@ export async function initCFPSession(sessionId: string, season = CURRENT_SEASON)
   const selectedConfIds = new Set((confRows ?? []).map(r => r.conference_id))
 
   // Generate conf champ games only for selected conferences
-  const allData = await fetchAllFBSData(sessionId, season)
+  const allData = await fetchAllFBSData(sessionId, season, bracket.sim_seed || sessionId)
   const confChampGames = await generateConfChampionshipGames(bracket.id, allData, selectedConfIds)
   return { bracket, confChampGames }
 }
@@ -373,14 +380,17 @@ export async function initCFPSession(sessionId: string, season = CURRENT_SEASON)
 // Runs after all conf champ games are picked.
 // Uses ALL FBS teams + conference champ results for realistic rankings.
 
-export async function computeAndSaveBracketSeedings(sessionId: string, season = CURRENT_SEASON): Promise<CFPBracket> {
+export async function computeAndSaveBracketSeedings(sessionId: string, season = CURRENT_SEASON, newSimSeed?: string): Promise<CFPBracket> {
   const supabase = await createClient()
 
   const bracket = await getCFPBracket(sessionId)
   if (!bracket) throw new Error('No bracket found')
 
+  // Use a new seed if provided (regenerate), otherwise keep the existing one
+  const simSeed = newSimSeed ?? (bracket.sim_seed || sessionId)
+
   // Fetch all data
-  const allData = await fetchAllFBSData(sessionId, season)
+  const allData = await fetchAllFBSData(sessionId, season, simSeed)
 
   // Fetch conf champ game picks
   const { data: champRows } = await supabase
@@ -436,15 +446,17 @@ export async function computeAndSaveBracketSeedings(sessionId: string, season = 
       seedings: seedings as unknown as Json,
       cfp_rankings: ranked as unknown as Json,
       is_customized: false,
+      sim_seed: simSeed,
       updated_at: new Date().toISOString(),
     })
     .eq('id', bracket.id)
-    .select('id, session_id, season, seedings, cfp_rankings, is_customized')
+    .select('id, session_id, season, seedings, cfp_rankings, is_customized, sim_seed')
     .single()
 
   if (!saved) throw new Error('Failed to save seedings')
   return {
     ...saved,
+    sim_seed: (saved as any).sim_seed ?? simSeed,
     seedings: saved.seedings as unknown as CFPSeed[],
     cfp_rankings: saved.cfp_rankings as unknown as CFPRankedTeam[],
   }

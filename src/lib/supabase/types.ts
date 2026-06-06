@@ -477,6 +477,7 @@ export interface Database {
           seedings: Json
           cfp_rankings: Json
           is_customized: boolean
+          sim_seed: string
           created_at: string
           updated_at: string
         }

@@ -25,7 +25,8 @@
       "Bash(npx next *)",
       "Bash(Start-Sleep -Seconds 4)",
       "Bash(Get-Content \"C:\\\\Users\\\\braun\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-braun-OneDrive-Desktop-The-Prediction-Sheet\\\\8dfb9a22-35bf-4203-b756-3ab598fc6823\\\\tasks\\\\b0z1voov1.output\")",
-      "Bash(Select-Object -Last 15)"
+      "Bash(Select-Object -Last 15)",
+      "Bash(git remote *)"
     ]
   }
 }
