@@ -200,34 +200,43 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
   // Sort by score, tiebreak wins
   scored.sort((a, b) => b.score !== a.score ? b.score - a.score : b.rec.wins - a.rec.wins)
 
-  // Mark auto bids (top 5 ranked conf champs, one per conference)
-  const autoBidConfs = new Set<string>()
-  return scored.map((s, i) => {
-    const isBidEligible = s.isChamp && !autoBidConfs.has(s.t.conference_id)
-    const isAutoBid = isBidEligible && autoBidConfs.size < 5
-      ? (autoBidConfs.add(s.t.conference_id), true)
-      : false
+  // Mark auto bids:
+  //   - Every P4 conference champion gets a guaranteed auto bid
+  //   - Best-ranked non-P4 (G5) conference champion gets the 5th auto bid
+  const p4AutoConfs = new Set<string>()
+  const autoIds = new Set<string>()
+  let g5AutoFound = false
 
-    return {
-      rank: i + 1,
-      team_id: s.t.id,
-      team_name: s.t.name,
-      team_abbr: s.t.abbreviation,
-      team_logo: s.t.logo_url,
-      team_color: s.t.color,
-      conf_id: s.t.conference_id,
-      conf_name: s.t.conference_name,
-      conf_abbr: s.t.conference_abbr,
-      overall_wins: s.rec.wins,
-      overall_losses: s.rec.losses,
-      conf_wins: s.rec.confWins,
-      conf_losses: s.rec.confLosses,
-      is_conf_champ: s.isChamp,
-      is_auto_bid: isAutoBid,
-      cfp_score: Math.round(s.score * 10) / 10,
-      win_pct: Math.round(s.winPct * 1000) / 1000,
-      sos_pct: Math.round(s.sos * 1000) / 1000,
-      quality_wins: Math.round(s.qw * 10) / 10,
+  for (const s of scored) {
+    if (!s.isChamp || isIndependent(s.t.conference_name)) continue
+    if (isP4(s.t.conference_name) && !p4AutoConfs.has(s.t.conference_id)) {
+      p4AutoConfs.add(s.t.conference_id)
+      autoIds.add(s.t.id)
+    } else if (!isP4(s.t.conference_name) && !g5AutoFound) {
+      g5AutoFound = true
+      autoIds.add(s.t.id)
     }
-  })
+  }
+
+  return scored.map((s, i) => ({
+    rank: i + 1,
+    team_id: s.t.id,
+    team_name: s.t.name,
+    team_abbr: s.t.abbreviation,
+    team_logo: s.t.logo_url,
+    team_color: s.t.color,
+    conf_id: s.t.conference_id,
+    conf_name: s.t.conference_name,
+    conf_abbr: s.t.conference_abbr,
+    overall_wins: s.rec.wins,
+    overall_losses: s.rec.losses,
+    conf_wins: s.rec.confWins,
+    conf_losses: s.rec.confLosses,
+    is_conf_champ: s.isChamp,
+    is_auto_bid: autoIds.has(s.t.id),
+    cfp_score: Math.round(s.score * 10) / 10,
+    win_pct: Math.round(s.winPct * 1000) / 1000,
+    sos_pct: Math.round(s.sos * 1000) / 1000,
+    quality_wins: Math.round(s.qw * 10) / 10,
+  }))
 }

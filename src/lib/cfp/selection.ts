@@ -1,8 +1,13 @@
 // CFP selection process: takes ranked teams, produces 12-team seeded field.
-// Follows real CFP rules: 5 auto bids (top 5 ranked conf champs),
-// top 4 of those get seeds 1-4 with byes, rest filled by at-large.
+// Real CFP rules (12-team format):
+//   - Each P4 conference champion gets an automatic bid (guaranteed)
+//   - Best non-P4 conference champion gets the 5th automatic bid
+//   - Top 4 auto bids (by rank) receive seeds 1-4 with first-round byes
+//   - Remaining 7 seeds (5-12) filled by 5th auto bid + at-large picks
 
 import type { CFPRankedTeam } from './rankings'
+
+const P4_RE = /SEC|Southeastern|Big Ten|Atlantic Coast|^ACC$|Big 12|Pac.?12/i
 
 export interface CFPSeed {
   seed: number
@@ -23,35 +28,44 @@ export interface CFPSeed {
 }
 
 export function generateCFPField(rankedTeams: CFPRankedTeam[]): CFPSeed[] {
-  // Separate: top 5 ranked conf champs = auto bids, everyone else = at-large candidates
-  const autoBids: CFPRankedTeam[] = []
-  const atLargeCandidates: CFPRankedTeam[] = []
-  const seenConfs = new Set<string>()
+  // ── Step 1: Guaranteed auto bid for each P4 conference champion ──
+  // Iterate teams in rank order — first conf champ encountered per P4 conf wins
+  const p4AutoBids: CFPRankedTeam[] = []
+  const seenP4Confs = new Set<string>()
 
   for (const team of rankedTeams) {
-    if (team.is_conf_champ && !seenConfs.has(team.conf_id) && autoBids.length < 5) {
-      autoBids.push(team)
-      seenConfs.add(team.conf_id)
-    } else {
-      atLargeCandidates.push(team)
+    if (team.is_conf_champ && P4_RE.test(team.conf_name) && !seenP4Confs.has(team.conf_id)) {
+      p4AutoBids.push(team)
+      seenP4Confs.add(team.conf_id)
     }
   }
 
-  // Seeds 1-4: top 4 auto bids (get byes)
-  const byeTeams = autoBids.slice(0, 4)
-  // 5th auto bid enters the 5-12 pool
-  const fifthAuto = autoBids[4] ? [autoBids[4]] : []
+  // ── Step 2: Best-ranked non-P4 (G5) conference champion ─────────
+  const takenP4Ids = new Set(p4AutoBids.map(t => t.team_id))
+  const g5AutoBid = rankedTeams.find(
+    t => t.is_conf_champ && !P4_RE.test(t.conf_name) && !takenP4Ids.has(t.team_id)
+  ) ?? null
 
-  const takenIds = new Set([...byeTeams, ...fifthAuto].map(t => t.team_id))
-  const atLargeNeeded = 8 - fifthAuto.length
-  const atLarge = atLargeCandidates
+  // All 5 auto bids sorted by CFP rank (best first)
+  const allAutoBids = [...p4AutoBids, ...(g5AutoBid ? [g5AutoBid] : [])]
+    .sort((a, b) => a.rank - b.rank)
+
+  // ── Step 3: Seeds 1-4 = top 4 auto bids, get first-round byes ───
+  const byeTeams = allAutoBids.slice(0, 4)
+  const fifthAuto = allAutoBids[4] ?? null
+
+  // ── Step 4: Seeds 5-12 = 5th auto bid + at-large ────────────────
+  const takenIds = new Set(allAutoBids.map(t => t.team_id))
+  const atLargeNeeded = fifthAuto ? 7 : 8
+  const atLarge = rankedTeams
     .filter(t => !takenIds.has(t.team_id))
     .slice(0, atLargeNeeded)
 
-  // Seeds 5-12: sort by rank (5th auto bid + at-large)
-  const seeds5to12 = [...fifthAuto, ...atLarge]
+  const seeds5to12 = [...(fifthAuto ? [fifthAuto] : []), ...atLarge]
     .sort((a, b) => a.rank - b.rank)
     .slice(0, 8)
+
+  const autoIds = new Set(allAutoBids.map(t => t.team_id))
 
   const toSeed = (team: CFPRankedTeam, seed: number, isAutoBid: boolean, isBye: boolean): CFPSeed => ({
     seed,
@@ -73,7 +87,7 @@ export function generateCFPField(rankedTeams: CFPRankedTeam[]): CFPSeed[] {
 
   return [
     ...byeTeams.map((t, i) => toSeed(t, i + 1, true, true)),
-    ...seeds5to12.map((t, i) => toSeed(t, i + 5, !!fifthAuto[0] && t.team_id === fifthAuto[0].team_id, false)),
+    ...seeds5to12.map((t, i) => toSeed(t, i + 5, autoIds.has(t.team_id), false)),
   ]
 }
 

@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { saveCFPBracketCustom, saveConfChampPick, computeAndSaveBracketSeedings, resetCFPSession } from '@/lib/data/cfp'
+import { saveCFPBracketCustom, saveConfChampPick, computeAndSaveBracketSeedings, getCFPBracket, resetCFPSession } from '@/lib/data/cfp'
 import type { CFPSeed, CFPRankedTeam } from '@/lib/data/cfp'
 
 // ── Conf champ picks ──────────────────────────────────────────────
@@ -73,12 +73,20 @@ export async function saveCustomBracketAction(bracketId: string, seedings: CFPSe
   revalidatePath('/cfb/full-season/cfp')
 }
 
-// ── Re-generate after customization (clear picks too) ────────────
+// ── Re-generate from latest predictions (preserves conf champ picks) ─
 
 export async function regenerateBracketAction(sessionId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-  await resetCFPSession(sessionId)
+
+  // Clear bracket game picks since teams may shift positions after recompute
+  const bracket = await getCFPBracket(sessionId)
+  if (bracket) {
+    await supabase.from('cfp_picks').delete().eq('bracket_id', bracket.id)
+  }
+
+  // Recompute seedings from current predictions + existing conf champ picks
+  await computeAndSaveBracketSeedings(sessionId)
   revalidatePath('/cfb/full-season/cfp')
 }
