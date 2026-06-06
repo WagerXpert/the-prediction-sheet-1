@@ -3,6 +3,8 @@ import { CURRENT_SEASON } from '@/lib/utils/constants'
 import { getConferenceLogo } from '@/lib/data/cfb'
 import { computeCFPRankings, type TeamData, type TeamGameResult, type CFPRankedTeam } from '@/lib/cfp/rankings'
 import { generateCFPField, type CFPSeed } from '@/lib/cfp/selection'
+import { getTeamRating, DEFAULT_RATING } from '@/lib/cfp/team-ratings'
+import { simulateGame } from '@/lib/cfp/simulation'
 import type { Json } from '@/lib/supabase/types'
 
 export type { CFPSeed, CFPRankedTeam }
@@ -110,17 +112,19 @@ interface AllFBSData {
   teams: TeamData[]
   teamById: Map<string, TeamData & { logo_url: string | null; color: string | null; abbreviation: string | null }>
   teamsByConf: Map<string, string[]>    // confId → teamIds
+  ratingByTeamId: Map<string, number>  // teamId → 0-100 rating
   games: Array<{
     id: string
     home_team_id: string | null
     away_team_id: string | null
     conference_game: boolean
+    neutral_site: boolean
     status: string
     home_team_points: number | null
     away_team_points: number | null
   }>
   predMap: Map<string, string>           // gameId → winner_team_id
-  getEffectiveWinner: (gameId: string, homeId: string | null, awayId: string | null, status: string, homePoints: number | null, awayPoints: number | null) => string | null
+  getEffectiveWinner: (gameId: string, homeId: string | null, awayId: string | null, status: string, homePoints: number | null, awayPoints: number | null, neutralSite?: boolean) => string | null
 }
 
 async function fetchAllFBSData(sessionId: string, season: number): Promise<AllFBSData> {
@@ -133,7 +137,7 @@ async function fetchAllFBSData(sessionId: string, season: number): Promise<AllFB
       .eq('sport_id', 'cfb'),
     supabase
       .from('games')
-      .select('id, home_team_id, away_team_id, conference_game, status, home_team_points, away_team_points')
+      .select('id, home_team_id, away_team_id, conference_game, neutral_site, status, home_team_points, away_team_points')
       .eq('sport_id', 'cfb')
       .eq('season', season)
       .eq('season_type', 'regular'),
@@ -169,17 +173,41 @@ async function fetchAllFBSData(sessionId: string, season: number): Promise<AllFB
 
   const predMap = new Map((predsRes.data ?? []).map(p => [p.game_id, p.winner_team_id]))
 
-  function getEffectiveWinner(gameId: string, homeId: string | null, awayId: string | null, status: string, homePoints: number | null, awayPoints: number | null): string | null {
+  // Build rating lookup: team ID → 0-100 preseason power rating
+  const ratingByTeamId = new Map<string, number>()
+  for (const [id, team] of teamById) {
+    ratingByTeamId.set(id, getTeamRating(team.name))
+  }
+
+  // Priority: actual result > user pick > simulation
+  function getEffectiveWinner(
+    gameId: string,
+    homeId: string | null,
+    awayId: string | null,
+    status: string,
+    homePoints: number | null,
+    awayPoints: number | null,
+    neutralSite = false,
+  ): string | null {
+    // 1. Actual completed result
     if (status === 'completed' && homePoints !== null && awayPoints !== null && homeId && awayId) {
       return homePoints > awayPoints ? homeId : awayId
     }
-    return predMap.get(gameId) ?? null
+    // 2. User's manual prediction
+    const userPick = predMap.get(gameId)
+    if (userPick) return userPick
+    // 3. Simulate using team ratings (deterministic per session + game)
+    if (!homeId || !awayId) return null
+    const homeRating = ratingByTeamId.get(homeId) ?? DEFAULT_RATING
+    const awayRating = ratingByTeamId.get(awayId) ?? DEFAULT_RATING
+    return simulateGame(sessionId, gameId, homeId, awayId, homeRating, awayRating, neutralSite)
   }
 
   return {
     teams,
     teamById,
     teamsByConf,
+    ratingByTeamId,
     games: (gamesRes.data ?? []) as AllFBSData['games'],
     predMap,
     getEffectiveWinner,
@@ -192,14 +220,15 @@ async function fetchAllFBSData(sessionId: string, season: number): Promise<AllFB
 
 async function generateConfChampionshipGames(
   bracketId: string,
-  data: AllFBSData
+  data: AllFBSData,
+  selectedConfIds: Set<string>
 ): Promise<CFPConfChampGame[]> {
   const supabase = await createClient()
 
-  // For each game, resolve the effective winner
+  // For each game, resolve the effective winner (actual > user pick > simulation)
   const effectiveWinners = new Map<string, string>()
   for (const g of data.games) {
-    const w = data.getEffectiveWinner(g.id, g.home_team_id, g.away_team_id, g.status, g.home_team_points, g.away_team_points)
+    const w = data.getEffectiveWinner(g.id, g.home_team_id, g.away_team_id, g.status, g.home_team_points, g.away_team_points, g.neutral_site)
     if (w) effectiveWinners.set(g.id, w)
   }
 
@@ -228,6 +257,7 @@ async function generateConfChampionshipGames(
   // Determine which conferences have enough data to generate a matchup
   const inserts: any[] = []
   for (const [confId, teamIds] of data.teamsByConf) {
+    if (!selectedConfIds.has(confId)) continue
     if (teamIds.length < 2) continue
     const conf = data.teams.find(t => t.conference_id === confId)
     if (!conf) continue
@@ -325,9 +355,17 @@ export async function initCFPSession(sessionId: string, season = CURRENT_SEASON)
     return { bracket, confChampGames: existing }
   }
 
-  // Generate conf champ games from all-FBS data
+  // Fetch user's selected conferences
+  const supabaseForConfs = await createClient()
+  const { data: confRows } = await supabaseForConfs
+    .from('full_season_conferences')
+    .select('conference_id')
+    .eq('session_id', sessionId)
+  const selectedConfIds = new Set((confRows ?? []).map(r => r.conference_id))
+
+  // Generate conf champ games only for selected conferences
   const allData = await fetchAllFBSData(sessionId, season)
-  const confChampGames = await generateConfChampionshipGames(bracket.id, allData)
+  const confChampGames = await generateConfChampionshipGames(bracket.id, allData, selectedConfIds)
   return { bracket, confChampGames }
 }
 
@@ -351,10 +389,10 @@ export async function computeAndSaveBracketSeedings(sessionId: string, season = 
     .eq('bracket_id', bracket.id)
     .not('winner_team_id', 'is', null)
 
-  // Resolve effective winners for regular season
+  // Resolve effective winners for regular season (actual > user pick > simulation)
   const effectiveWinners = new Map<string, string>()
   for (const g of allData.games) {
-    const w = allData.getEffectiveWinner(g.id, g.home_team_id, g.away_team_id, g.status, g.home_team_points, g.away_team_points)
+    const w = allData.getEffectiveWinner(g.id, g.home_team_id, g.away_team_id, g.status, g.home_team_points, g.away_team_points, g.neutral_site)
     if (w) effectiveWinners.set(g.id, w)
   }
 

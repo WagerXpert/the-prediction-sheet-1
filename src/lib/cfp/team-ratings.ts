@@ -1,0 +1,193 @@
+// Preseason 2026 FBS team ratings (0–100 scale)
+// Based on ESPN FPI, preseason polls, recruiting, returning production, and recent program success.
+//
+// 95-99 = National Championship Contenders
+// 90-94 = Playoff Contenders
+// 85-89 = Top 25 Teams
+// 80-84 = Above Average Power Conference Teams
+// 75-79 = Average Bowl Teams
+// 70-74 = Fringe Bowl Teams
+// 60-69 = Lower Tier FBS Teams
+// <60   = Bottom Tier FBS Teams
+
+export const DEFAULT_RATING = 65
+
+export const TEAM_RATINGS: Record<string, number> = {
+
+  // ── SEC ─────────────────────────────────────────────────────────
+  'Georgia':              98,
+  'Texas':                97,
+  'Alabama':              96,
+  'LSU':                  90,
+  'Tennessee':            87,
+  'Texas A&M':            86,
+  'Ole Miss':             89,
+  'Oklahoma':             87,
+  'Florida':              69,
+  'Auburn':               81,
+  'Missouri':             81,
+  'Mississippi State':    70,
+  'Arkansas':             70,
+  'South Carolina':       67,
+  'Kentucky':             71,
+  'Vanderbilt':           68,
+
+  // ── Big Ten ──────────────────────────────────────────────────────
+  'Ohio State':           99,
+  'Oregon':               95,
+  'Penn State':           94,
+  'Michigan':             92,
+  'Indiana':              85,
+  'USC':                  88,
+  'Illinois':             78,
+  'Wisconsin':            82,
+  'Minnesota':            76,
+  'Iowa':                 72,
+  'Nebraska':             78,
+  'UCLA':                 68,
+  'Washington':           63,
+  'Maryland':             68,
+  'Michigan State':       72,
+  'Purdue':               67,
+  'Rutgers':              59,
+  'Northwestern':         59,
+
+  // ── ACC ─────────────────────────────────────────────────────────
+  'Clemson':              91,
+  'Miami':                88,
+  'Florida State':        86,
+  'North Carolina':       83,
+  'Pittsburgh':           80,
+  'Virginia Tech':        80,
+  'Duke':                 73,
+  'Louisville':           77,
+  'Syracuse':             77,
+  'SMU':                  74,
+  'Georgia Tech':         75,
+  'NC State':             67,
+  'Stanford':             69,
+  'California':           66,
+  'Wake Forest':          71,
+  'Virginia':             58,
+  'Boston College':       65,
+
+  // ── Big 12 ──────────────────────────────────────────────────────
+  'Iowa State':           85,
+  'Utah':                 84,
+  'Kansas State':         83,
+  'Oklahoma State':       82,
+  'Colorado':             79,
+  'Arizona State':        80,
+  'West Virginia':        77,
+  'Texas Tech':           76,
+  'BYU':                  73,
+  'TCU':                  72,
+  'Baylor':               71,
+  'UCF':                  71,
+  'Houston':              70,
+  'Arizona':              63,
+  'Kansas':               65,
+  'Cincinnati':           73,
+
+  // ── American Athletic ───────────────────────────────────────────
+  'Tulane':               74,
+  'Memphis':              73,
+  'Army':                 78,
+  'Navy':                 58,
+  'Tulsa':                62,
+  'UAB':                  63,
+  'UTSA':                 62,
+  'East Carolina':        58,
+  'North Texas':          62,
+  'Florida Atlantic':     62,
+  'Temple':               55,
+  'Charlotte':            57,
+  'South Florida':        58,
+  'Rice':                 60,
+
+  // ── Mountain West ───────────────────────────────────────────────
+  'Boise State':          79,
+  'Fresno State':         66,
+  'UNLV':                 62,
+  'San Diego State':      64,
+  'Colorado State':       65,
+  'Utah State':           64,
+  'Nevada':               65,
+  'Wyoming':              63,
+  'San Jose State':       60,
+  'Air Force':            62,
+  'New Mexico':           58,
+  'Hawaii':               58,
+
+  // ── Sun Belt ────────────────────────────────────────────────────
+  'James Madison':        75,
+  'Liberty':              75,
+  'Appalachian State':    63,
+  'Coastal Carolina':     63,
+  'Georgia Southern':     64,
+  'Georgia State':        65,
+  'South Alabama':        64,
+  'Louisiana':            63,
+  'Troy':                 61,
+  'Texas State':          63,
+  'Arkansas State':       60,
+  'Louisiana Monroe':     57,
+  'Southern Miss':        57,
+  'Marshall':             61,
+  'Old Dominion':         57,
+
+  // ── MAC ─────────────────────────────────────────────────────────
+  'Toledo':               59,
+  'Northern Illinois':    58,
+  'Ohio':                 57,
+  'Miami (OH)':           61,
+  'Central Michigan':     57,
+  'Western Michigan':     57,
+  'Eastern Michigan':     57,
+  'Ball State':           55,
+  'Bowling Green':        56,
+  'Buffalo':              56,
+  'Akron':                54,
+  'Kent State':           54,
+
+  // ── CUSA ────────────────────────────────────────────────────────
+  'Louisiana Tech':       60,
+  'Western Kentucky':     63,
+  'UTEP':                 58,
+  'Middle Tennessee':     60,
+  'New Mexico State':     55,
+  'Sam Houston':          57,
+  'Florida International':55,
+  'Kennesaw State':       55,
+  'Jacksonville State':   56,
+
+  // ── Independents ────────────────────────────────────────────────
+  'Notre Dame':           93,
+  'Oregon State':         76,
+  'Washington State':     65,
+  'Connecticut':          56,
+  'Massachusetts':        52,
+}
+
+// Look up a team rating by school name with fallback matching
+export function getTeamRating(teamName: string): number {
+  if (!teamName) return DEFAULT_RATING
+
+  // 1. Exact match
+  const exact = TEAM_RATINGS[teamName]
+  if (exact !== undefined) return exact
+
+  // 2. Case-insensitive exact
+  const lower = teamName.toLowerCase()
+  for (const [k, v] of Object.entries(TEAM_RATINGS)) {
+    if (k.toLowerCase() === lower) return v
+  }
+
+  // 3. One name fully contains the other (handles "UL Lafayette" ↔ "Louisiana", etc.)
+  for (const [k, v] of Object.entries(TEAM_RATINGS)) {
+    const kl = k.toLowerCase()
+    if (lower.includes(kl) || kl.includes(lower)) return v
+  }
+
+  return DEFAULT_RATING
+}

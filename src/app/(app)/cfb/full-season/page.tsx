@@ -125,29 +125,19 @@ export default async function FullSeasonPage() {
         })}
       </div>
 
-      {/* CFP Bracket call-to-action */}
+      {/* Next step CTA */}
       {progress.games_predicted > 0 && (
         <div className="mt-12">
-          <div className={`rounded-2xl border-2 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5 ${
-            progress.games_predicted === progress.games_total
-              ? 'border-[#84cc16] bg-gradient-to-br from-[#84cc16]/10 to-transparent'
-              : 'border-zinc-200 bg-zinc-50'
-          }`}>
+          <div className="rounded-2xl border-2 border-zinc-200 bg-zinc-50 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
             <div className="flex-1 min-w-0">
-              <p className={`text-xs font-bold tracking-[0.2em] uppercase mb-1 ${
-                progress.games_predicted === progress.games_total ? 'text-[#65a30d]' : 'text-zinc-400'
-              }`}>
-                College Football Playoff
+              <p className="text-xs font-bold tracking-[0.2em] uppercase mb-1 text-zinc-400">
+                Next Step
               </p>
-              <h3 className="text-xl font-black">
-                {progress.games_predicted === progress.games_total
-                  ? 'Your CFP Bracket is Ready'
-                  : 'CFP Bracket — Partial'}
-              </h3>
+              <h3 className="text-xl font-black">Conference Championship Week</h3>
               <p className="text-sm text-zinc-500 mt-1">
                 {progress.games_predicted === progress.games_total
-                  ? 'All predictions complete. View your generated 12-team bracket and pick the champion.'
-                  : `${progress.games_predicted} of ${progress.games_total} games predicted. You can generate a bracket now or finish predictions first.`}
+                  ? 'All regular season picks done. Head to Conference Championships, then the CFP Bracket.'
+                  : `${progress.games_predicted} of ${progress.games_total} games predicted. You can move on whenever you're ready — picks don't have to be complete.`}
               </p>
               {progress.games_total > 0 && (
                 <div className="mt-3 flex items-center gap-2">
@@ -165,13 +155,9 @@ export default async function FullSeasonPage() {
             </div>
             <Link
               href="/cfb/full-season/cfp"
-              className={`shrink-0 inline-block font-bold px-6 py-3 rounded-xl transition-colors text-sm ${
-                progress.games_predicted === progress.games_total
-                  ? 'bg-[#84cc16] text-black hover:bg-[#65a30d]'
-                  : 'bg-white border border-zinc-300 text-black hover:border-zinc-400'
-              }`}
+              className="shrink-0 inline-block font-bold px-6 py-3 rounded-xl transition-colors text-sm bg-[#84cc16] text-black hover:bg-[#65a30d]"
             >
-              {progress.games_predicted === progress.games_total ? 'View CFP Bracket' : 'Preview CFP Bracket'}
+              Go to Conference Championships →
             </Link>
           </div>
         </div>

@@ -42,11 +42,21 @@ export default async function CFPBracketPage() {
 
   const { bracket, confChampGames } = bracketData
 
-  // Check if all conf champ games have picks
+  const hasSeedings = (bracket.seedings as any[]).length > 0
   const allConfChampsPicked = confChampGames.length > 0 && confChampGames.every(g => g.winner_team_id !== null)
 
-  // If conf champs not done: show Conference Championship Week
-  if (!allConfChampsPicked) {
+  // Auto-generate seedings when all conf champs are picked and seedings don't exist yet
+  let finalBracket = bracket
+  if (!hasSeedings && allConfChampsPicked) {
+    try {
+      finalBracket = await computeAndSaveBracketSeedings(session.id)
+    } catch {
+      // fall through to conf champ page
+    }
+  }
+
+  // Show Conference Championship Week if seedings haven't been generated yet
+  if (!(finalBracket.seedings as any[]).length) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
         <Breadcrumb />
@@ -56,36 +66,12 @@ export default async function CFPBracketPage() {
           </p>
           <h1 className="text-4xl font-black">Conference Championships</h1>
           <p className="text-zinc-500 mt-1">
-            Pick every conference championship game. Conference champions determine automatic CFP bids.
+            Pick your conference championship games. When you're ready — even with partial picks — generate your CFP bracket.
           </p>
         </div>
         <ConfChampClient bracket={bracket} confChampGames={confChampGames} />
       </div>
     )
-  }
-
-  // All conf champs picked — generate seedings if needed
-  let finalBracket = bracket
-  if (!(bracket.seedings as any[]).length) {
-    try {
-      finalBracket = await computeAndSaveBracketSeedings(session.id)
-    } catch {
-      return (
-        <div className="max-w-5xl mx-auto px-6 py-10">
-          <Breadcrumb />
-          <div className="text-center py-24">
-            <div className="text-6xl mb-5">🏈</div>
-            <h1 className="text-2xl font-black mb-2">Could Not Generate Rankings</h1>
-            <p className="text-zinc-500 mb-6 max-w-sm mx-auto">
-              There may not be enough prediction data. Try adding more conferences to Full Season Mode.
-            </p>
-            <Link href="/cfb/full-season" className="inline-block bg-[#84cc16] text-black font-bold px-6 py-3 rounded-xl hover:bg-[#65a30d] transition-colors">
-              Back to Season Predictions
-            </Link>
-          </div>
-        </div>
-      )
-    }
   }
 
   const picks = await getCFPPicks(finalBracket.id)

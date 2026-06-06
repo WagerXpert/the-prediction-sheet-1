@@ -156,7 +156,12 @@ export default function ConfChampClient({ bracket, confChampGames }: Props) {
         <div className="flex-1 min-w-0">
           <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
             <span className="font-semibold">{pickedCount} of {totalGames} championship games picked</span>
-            {allPicked && <span className="text-[#65a30d] font-bold">All picked — ready to generate!</span>}
+            {allPicked
+              ? <span className="text-[#65a30d] font-bold">All picked — ready to generate!</span>
+              : pickedCount > 0
+                ? <span className="text-zinc-400">You can proceed now or finish picking first</span>
+                : null
+            }
           </div>
           <div className="h-2 bg-zinc-200 rounded-full overflow-hidden">
             <div
@@ -167,14 +172,15 @@ export default function ConfChampClient({ bracket, confChampGames }: Props) {
         </div>
         <button
           onClick={handleGenerateBracket}
-          disabled={!allPicked || isGenerating || isPending}
-          className={`shrink-0 font-bold px-5 py-2.5 rounded-xl transition-all text-sm ${
-            allPicked
-              ? 'bg-[#84cc16] text-black hover:bg-[#65a30d] shadow-sm'
-              : 'bg-zinc-200 text-zinc-400 cursor-not-allowed'
-          } disabled:opacity-60`}
+          disabled={isGenerating || isPending}
+          className="shrink-0 font-bold px-5 py-2.5 rounded-xl transition-all text-sm bg-[#84cc16] text-black hover:bg-[#65a30d] shadow-sm disabled:opacity-60"
         >
-          {isGenerating ? 'Generating…' : 'Generate CFP Rankings & Bracket →'}
+          {isGenerating
+            ? 'Generating…'
+            : allPicked
+              ? 'Generate CFP Rankings & Bracket →'
+              : 'Continue to CFP Bracket →'
+          }
         </button>
       </div>
 
