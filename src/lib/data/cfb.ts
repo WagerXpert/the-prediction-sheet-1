@@ -189,3 +189,21 @@ export async function getCfbAvailableWeeks(): Promise<number[]> {
 
   return [...new Set(data.map((g) => g.week as number))].sort((a, b) => a - b)
 }
+
+// The open week is the earliest week that still has at least one non-completed game.
+// All other weeks are locked (view-only). Returns null if all weeks are complete or no games exist.
+export async function getOpenWeek(): Promise<number | null> {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('games')
+    .select('week')
+    .eq('season', CURRENT_SEASON)
+    .not('week', 'is', null)
+    .neq('status', 'completed')
+    .order('week')
+    .limit(1)
+
+  if (!data?.length) return null
+  return data[0].week as number
+}

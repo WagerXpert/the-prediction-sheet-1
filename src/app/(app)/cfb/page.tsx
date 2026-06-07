@@ -41,10 +41,38 @@ export default function CFBHubPage() {
         <span className="text-[#84cc16] text-2xl font-black group-hover:translate-x-1 transition-transform shrink-0">→</span>
       </Link>
 
-      {/* Modes 2 & 3 */}
+      {/* Modes 2, 3, 4 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
 
-        {/* Mode 2: Team Season Tracker */}
+        {/* Mode 2: CFB Pick'em */}
+        <Link
+          href="/cfb/game-picks"
+          className="flex flex-col gap-4 p-6 rounded-2xl border-2 border-[#84cc16]/40 bg-[#84cc16]/5 hover:border-[#84cc16] hover:shadow-md transition-all group"
+        >
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d]">Weekly Mode</p>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#84cc16] text-black">Leaderboard</span>
+            </div>
+            <h2 className="text-xl font-black">CFB Pick'em</h2>
+            <p className="text-sm text-zinc-500 mt-1.5 leading-relaxed">
+              Pick the winner of every CFB game each week. One week opens at a time — make your
+              picks before kickoff, then see how you stack up on the public leaderboard.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['Week by Week', 'All Games', 'Public Leaderboard'].map(tag => (
+              <span key={tag} className="text-[11px] font-medium px-2 py-1 rounded-full bg-[#84cc16]/10 text-[#3f6212]">
+                {tag}
+              </span>
+            ))}
+          </div>
+          <span className="text-sm font-bold text-[#65a30d] group-hover:text-[#3f6212] transition-colors">
+            Make your picks →
+          </span>
+        </Link>
+
+        {/* Mode 3: Team Season Tracker */}
         <Link
           href="/cfb/team-tracker"
           className="flex flex-col gap-4 p-6 rounded-2xl border border-zinc-200 hover:border-[#84cc16] hover:shadow-md transition-all group"
@@ -69,7 +97,7 @@ export default function CFBHubPage() {
           </span>
         </Link>
 
-        {/* Mode 3: Playoff Mode */}
+        {/* Mode 4: Playoff Mode */}
         <Link
           href="/cfb/playoff"
           className="flex flex-col gap-4 p-6 rounded-2xl border border-zinc-200 hover:border-[#84cc16] hover:shadow-md transition-all group"

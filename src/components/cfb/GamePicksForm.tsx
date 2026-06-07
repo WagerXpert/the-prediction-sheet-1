@@ -11,6 +11,7 @@ interface Props {
   userId: string
   week: number
   weeks: number[]
+  openWeek: number | null
   games: CfbGame[]
   existing: Record<string, string>
   results: Record<string, GamePickResult>
@@ -22,29 +23,24 @@ function formatGameDate(dateStr: string | null): string {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function winningTeamId(game: CfbGame): string | null {
-  if (game.status !== 'completed') return null
-  // CfbGame doesn't carry scores, but the `status` field tells us it's done.
-  // Winning team can only be shown if scores are on the game object.
-  // For now we rely solely on is_correct from the predictions_game grade.
-  return null
-}
+export default function GamePicksForm({ userId, week, weeks, openWeek, games, existing, results }: Props) {
+  const isLocked = openWeek !== null && week !== openWeek
+  const isAllComplete = openWeek === null
 
-export default function GamePicksForm({ userId, week, weeks, games, existing, results }: Props) {
   const [picks, setPicks] = useState<Record<string, string>>(() => ({ ...existing }))
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [isPending, startTransition] = useTransition()
 
-  const unpickedOpen = games.filter(
-    (g) => g.status !== 'completed' && !picks[g.id]
-  ).length
+  const unpickedOpen = games.filter((g) => g.status !== 'completed' && !picks[g.id]).length
   const pickedCount = Object.keys(picks).length
 
   function handlePick(gameId: string, teamId: string) {
+    if (isLocked) return
     setPicks((prev) => ({ ...prev, [gameId]: teamId }))
   }
 
   function handleSave() {
+    if (isLocked) return
     startTransition(async () => {
       setSaveStatus('saving')
       const supabase = createClient()
@@ -100,23 +96,65 @@ export default function GamePicksForm({ userId, week, weeks, games, existing, re
   return (
     <div>
       {/* Week tabs */}
-      <div className="flex flex-wrap gap-2 mb-8">
-        {weeks.map((w) => (
-          <Link
-            key={w}
-            href={`/cfb/game-picks?week=${w}`}
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
-              w === week
-                ? 'bg-black text-white border-black'
-                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
-            }`}
-          >
-            Week {w}
-          </Link>
-        ))}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {weeks.map((w) => {
+          const isPast = openWeek !== null && w < openWeek
+          const isCurrent = openWeek !== null && w === openWeek
+          const isSelected = w === week
+
+          return (
+            <Link
+              key={w}
+              href={`/cfb/game-picks?week=${w}`}
+              className={`relative px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
+                isSelected
+                  ? 'bg-black text-white border-black'
+                  : isCurrent
+                  ? 'bg-[#84cc16]/10 text-[#3f6212] border-[#84cc16] hover:bg-[#84cc16]/20'
+                  : isPast
+                  ? 'bg-white text-zinc-400 border-zinc-200 hover:border-zinc-300'
+                  : 'bg-zinc-50 text-zinc-300 border-zinc-100 cursor-default pointer-events-none'
+              }`}
+            >
+              {w === 0 ? 'Week 0' : `Week ${w}`}
+              {isCurrent && !isSelected && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#84cc16]" />
+              )}
+              {isPast && <span className="ml-1.5 text-[10px] text-zinc-300">✓</span>}
+              {openWeek === null || w > openWeek ? <span className="ml-1.5 text-[10px] opacity-50">🔒</span> : null}
+            </Link>
+          )
+        })}
       </div>
 
-      {/* Week score summary (only when graded games exist) */}
+      {/* Lock banner for past/future weeks */}
+      {isLocked && !isAllComplete && (
+        <div className="mb-6 flex items-start gap-3 px-4 py-3.5 rounded-xl bg-zinc-50 border border-zinc-200">
+          <span className="text-base shrink-0 mt-0.5">🔒</span>
+          <div>
+            <p className="text-sm font-bold text-zinc-700">
+              {openWeek !== null && week < openWeek
+                ? `Week ${week} is complete — picks are locked.`
+                : `Week ${week} isn't open yet.`}
+            </p>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              {openWeek !== null && week < openWeek
+                ? 'You can review your picks and results below.'
+                : `Week ${openWeek} is the current open week. Picks unlock when Week ${openWeek} finishes.`}
+            </p>
+            {openWeek !== null && (
+              <Link
+                href={`/cfb/game-picks?week=${openWeek}`}
+                className="inline-block mt-2 text-xs font-bold text-[#65a30d] hover:underline"
+              >
+                Go to Week {openWeek} →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Week score summary */}
       {gradedThisWeek.length > 0 && (
         <div className="mb-6 flex items-center gap-6 px-5 py-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-sm">
           <div>
@@ -129,31 +167,32 @@ export default function GamePicksForm({ userId, week, weeks, games, existing, re
         </div>
       )}
 
-      {/* Sticky save bar */}
-      <div className="sticky top-[73px] z-30 mb-8 flex items-center justify-between px-5 py-3 bg-white/95 backdrop-blur border border-zinc-200 rounded-2xl shadow-sm">
-        <p className="text-sm text-zinc-500">
-          <span className="font-semibold text-black">{pickedCount}</span> of {games.length} games
-          picked
-          {unpickedOpen > 0 && (
-            <span className="ml-2 text-zinc-400">({unpickedOpen} open)</span>
-          )}
-        </p>
-        <div className="flex items-center gap-3">
-          {saveStatus === 'saved' && (
-            <span className="text-sm font-semibold text-green-600">Saved!</span>
-          )}
-          {saveStatus === 'error' && (
-            <span className="text-sm font-semibold text-red-600">Error — try again</span>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={isPending || unpickedOpen === games.filter((g) => g.status !== 'completed').length}
-            className="px-5 py-2 bg-[#84cc16] text-black font-bold text-sm rounded-xl hover:bg-[#65a30d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isPending ? 'Saving…' : 'Save Picks'}
-          </button>
+      {/* Sticky save bar — only shown when week is open */}
+      {!isLocked && !isAllComplete && (
+        <div className="sticky top-[73px] z-30 mb-8 flex items-center justify-between px-5 py-3 bg-white/95 backdrop-blur border border-zinc-200 rounded-2xl shadow-sm">
+          <p className="text-sm text-zinc-500">
+            <span className="font-semibold text-black">{pickedCount}</span> of {games.length} games picked
+            {unpickedOpen > 0 && (
+              <span className="ml-2 text-zinc-400">({unpickedOpen} open)</span>
+            )}
+          </p>
+          <div className="flex items-center gap-3">
+            {saveStatus === 'saved' && (
+              <span className="text-sm font-semibold text-green-600">Saved!</span>
+            )}
+            {saveStatus === 'error' && (
+              <span className="text-sm font-semibold text-red-600">Error — try again</span>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={isPending || unpickedOpen === games.filter((g) => g.status !== 'completed').length}
+              className="px-5 py-2 bg-[#84cc16] text-black font-bold text-sm rounded-xl hover:bg-[#65a30d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isPending ? 'Saving…' : 'Save Picks'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Game list */}
       {games.length === 0 ? (
@@ -167,6 +206,7 @@ export default function GamePicksForm({ userId, week, weeks, games, existing, re
             const isCompleted = game.status === 'completed'
             const result = results[game.id]
             const isGraded = result?.isCorrect !== null && result?.isCorrect !== undefined
+            const gameIsPickable = !isLocked && !isCompleted
 
             return (
               <div
@@ -178,17 +218,12 @@ export default function GamePicksForm({ userId, week, weeks, games, existing, re
                   <div className="flex items-center gap-3 text-zinc-400">
                     {game.game_date && <span>{formatGameDate(game.game_date)}</span>}
                     {game.conference_game && (
-                      <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">
-                        Conference
-                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Conference</span>
                     )}
                     {isCompleted && (
-                      <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">
-                        Final
-                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Final</span>
                     )}
                   </div>
-                  {/* Grade badge */}
                   {isGraded && (
                     <div className="flex items-center gap-2">
                       {result.isCorrect ? (
@@ -210,19 +245,17 @@ export default function GamePicksForm({ userId, week, weeks, games, existing, re
                     team={game.away_team}
                     isPicked={picked === game.away_team?.id}
                     isCorrect={isGraded && picked === game.away_team?.id ? result.isCorrect : null}
-                    isLocked={isCompleted}
+                    isLocked={!gameIsPickable}
                     onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
                   />
-
                   <span className="text-zinc-300 font-semibold text-sm shrink-0">
                     {game.neutral_site ? 'vs' : '@'}
                   </span>
-
                   <TeamButton
                     team={game.home_team}
                     isPicked={picked === game.home_team?.id}
                     isCorrect={isGraded && picked === game.home_team?.id ? result.isCorrect : null}
-                    isLocked={isCompleted}
+                    isLocked={!gameIsPickable}
                     onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
                   />
                 </div>
@@ -232,8 +265,8 @@ export default function GamePicksForm({ userId, week, weeks, games, existing, re
         </div>
       )}
 
-      {/* Bottom save */}
-      {games.some((g) => g.status !== 'completed') && (
+      {/* Bottom save — only when week is open */}
+      {!isLocked && !isAllComplete && games.some((g) => g.status !== 'completed') && (
         <div className="mt-8 flex justify-end">
           <button
             onClick={handleSave}
@@ -273,6 +306,8 @@ function TeamButton({
     cls += 'bg-red-400 text-white border-red-400'
   } else if (isPicked) {
     cls += 'bg-[#84cc16] text-black border-[#84cc16]'
+  } else if (isLocked) {
+    cls += 'bg-zinc-50 text-zinc-400 border-zinc-200'
   } else {
     cls += 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50'
   }

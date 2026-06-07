@@ -31,16 +31,16 @@ function TeamChip({
   isLoser: boolean
   isCurrentTeam: boolean
 }) {
-  if (!team) return <span className="text-xs text-zinc-300 w-20">TBD</span>
+  if (!team) return <span className="text-xs text-zinc-300 w-24">TBD</span>
   const abbr = team.abbreviation ?? team.name.slice(0, 5)
   return (
-    <div className={`flex items-center gap-1.5 w-24 shrink-0 ${isLoser ? 'opacity-30' : ''}`}>
+    <div className={`flex items-center gap-2 w-28 shrink-0 ${isLoser ? 'opacity-30' : ''}`}>
       {team.logo_url ? (
-        <img src={team.logo_url} alt={abbr} className="w-4 h-4 object-contain shrink-0" />
+        <img src={team.logo_url} alt={abbr} className="w-5 h-5 object-contain shrink-0" />
       ) : (
-        <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
+        <div className="w-5 h-5 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
       )}
-      <span className={`text-xs truncate ${isCurrentTeam ? 'font-black' : 'font-medium'} ${isWinner ? 'text-[#3f6212]' : 'text-zinc-700'}`}>
+      <span className={`text-sm truncate ${isCurrentTeam ? 'font-black' : 'font-semibold'} ${isWinner ? 'text-[#3f6212]' : 'text-zinc-700'}`}>
         {abbr}
       </span>
     </div>
@@ -167,25 +167,23 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season,
                   return (
                     <div
                       key={game.id}
-                      className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${
+                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${
                         pickResult === 'correct' ? 'bg-[#84cc16]/5' :
                         pickResult === 'incorrect' ? 'bg-red-50/60' :
                         'hover:bg-zinc-50/60'
                       } ${!isLastInWeek || !isLastWeek ? 'border-b border-zinc-100' : ''}`}
                     >
-                      {/* Date */}
-                      <div className="shrink-0 w-14 text-right">
-                        <span className="text-[10px] text-zinc-400">
+                      {/* Date + status */}
+                      <div className="shrink-0 w-16 text-right space-y-0.5">
+                        <div className="text-xs text-zinc-400">
                           {game.game_date ? formatShortDate(game.game_date) : `Wk ${week || '?'}`}
-                        </span>
-                      </div>
-
-                      {/* Badges */}
-                      <div className="flex gap-1 shrink-0 w-14">
-                        {game.conference_game && <span className="text-[9px] font-bold text-zinc-300 uppercase">CONF</span>}
-                        {isCompleted && <span className="text-[9px] font-bold text-zinc-400 uppercase">Final</span>}
-                        {pickResult === 'correct' && <span className="text-[9px] font-bold text-[#65a30d] uppercase">✓</span>}
-                        {pickResult === 'incorrect' && <span className="text-[9px] font-bold text-red-500 uppercase">✗</span>}
+                        </div>
+                        <div className="flex justify-end gap-1">
+                          {game.conference_game && <span className="text-[9px] font-bold text-zinc-300 uppercase">CONF</span>}
+                          {isCompleted && <span className="text-[9px] font-bold text-zinc-400 uppercase">Final</span>}
+                          {pickResult === 'correct' && <span className="text-[9px] font-bold text-[#65a30d]">✓</span>}
+                          {pickResult === 'incorrect' && <span className="text-[9px] font-bold text-red-500">✗</span>}
+                        </div>
                       </div>
 
                       {/* Matchup */}
@@ -196,7 +194,7 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season,
                           isLoser={displayWinnerId !== null && displayWinnerId !== game.away_team?.id}
                           isCurrentTeam={game.away_team?.id === teamId}
                         />
-                        <span className="text-[10px] text-zinc-300 shrink-0">
+                        <span className="text-xs text-zinc-300 shrink-0">
                           {game.neutral_site ? 'vs' : '@'}
                         </span>
                         <TeamChip
@@ -208,42 +206,42 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season,
                       </div>
 
                       {/* Pick area */}
-                      <div className="shrink-0 flex items-center justify-end w-28">
+                      <div className="shrink-0 flex items-center justify-end w-32">
                         {isCompleted ? (
-                          <span className="text-xs font-semibold text-zinc-500 tabular-nums">
+                          <span className="text-sm font-semibold text-zinc-500 tabular-nums">
                             {game.away_team_points}–{game.home_team_points}
                           </span>
                         ) : isSaving ? (
-                          <span className="text-[10px] text-zinc-300">Saving…</span>
+                          <span className="text-xs text-zinc-300">Saving…</span>
                         ) : pickedId ? (
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs font-bold text-[#65a30d]">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-bold text-[#65a30d]">
                               {pickedId === game.away_team?.id ? awayAbbr : homeAbbr}
                             </span>
-                            <span className="text-[10px] text-[#65a30d] font-black">✓</span>
+                            <span className="text-xs text-[#65a30d] font-black">✓</span>
                             <button
                               onClick={() => {
                                 const newPicks = { ...picks }
                                 delete newPicks[game.id]
                                 setPicks(newPicks)
                               }}
-                              className="text-[10px] text-zinc-300 hover:text-zinc-500 ml-1 leading-none"
+                              className="text-xs text-zinc-300 hover:text-zinc-500 ml-1 leading-none"
                               title="Clear pick"
                             >
                               ×
                             </button>
                           </div>
                         ) : (
-                          <div className="flex gap-1">
+                          <div className="flex gap-1.5">
                             <button
                               onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
-                              className="px-2 py-0.5 rounded-full border border-zinc-200 text-[11px] font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
+                              className="px-3 py-1 rounded-full border border-zinc-200 text-xs font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
                             >
                               {awayAbbr}
                             </button>
                             <button
                               onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
-                              className="px-2 py-0.5 rounded-full border border-zinc-200 text-[11px] font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
+                              className="px-3 py-1 rounded-full border border-zinc-200 text-xs font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
                             >
                               {homeAbbr}
                             </button>
