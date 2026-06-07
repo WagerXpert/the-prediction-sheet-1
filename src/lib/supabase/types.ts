@@ -563,6 +563,70 @@ export interface Database {
           },
         ]
       }
+      team_tracker_picks: {
+        Row: {
+          id: string
+          user_id: string
+          team_id: string
+          game_id: string
+          winner_team_id: string
+          season: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          team_id: string
+          game_id: string
+          winner_team_id: string
+          season: number
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['team_tracker_picks']['Insert']>
+        Relationships: []
+      }
+      standalone_playoff_brackets: {
+        Row: {
+          id: string
+          user_id: string
+          season: number
+          seedings: Json
+          setup_mode: string
+          sim_seed: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          season: number
+          seedings: Json
+          setup_mode: string
+          sim_seed: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['standalone_playoff_brackets']['Row'], 'id' | 'created_at'>>
+        Relationships: []
+      }
+      standalone_playoff_picks: {
+        Row: {
+          id: string
+          bracket_id: string
+          round: number
+          game_index: number
+          winner_team_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          bracket_id: string
+          round: number
+          game_index: number
+          winner_team_id: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['standalone_playoff_picks']['Insert']>
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]?: never
