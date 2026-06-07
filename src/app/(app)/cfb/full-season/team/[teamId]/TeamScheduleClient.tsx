@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { FSGame, ConferenceGameRow, ConferenceTeamRow } from '@/lib/data/full-season'
 
@@ -12,14 +13,15 @@ interface Props {
   conferenceGames: ConferenceGameRow[]
   initialPicks: Record<string, string>
   season: number
+  backHref: string
 }
 
-function formatDate(dateStr: string | null): string {
+function formatShortDate(dateStr: string | null): string {
   if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function actualWinner(game: { status: string; home_team_points: number | null; away_team_points: number | null; home_team: { id: string } | null; away_team: { id: string } | null }): string | null {
+function actualWinnerId(game: FSGame): string | null {
   if (game.status !== 'completed' || game.home_team_points === null || game.away_team_points === null) return null
   return game.home_team_points > game.away_team_points
     ? game.home_team?.id ?? null
@@ -33,37 +35,49 @@ function effectiveWinner(game: ConferenceGameRow, picks: Record<string, string>)
   return picks[game.id] ?? null
 }
 
-// For FSGame (which has home_team/away_team objects, not just ids)
-function effectiveWinnerFromGame(game: FSGame, picks: Record<string, string>): string | null {
-  if (game.status === 'completed' && game.home_team_points !== null && game.away_team_points !== null) {
-    return game.home_team_points > game.away_team_points
-      ? game.home_team?.id ?? null
-      : game.away_team?.id ?? null
-  }
-  return picks[game.id] ?? null
-}
-
-function computeStandings(
-  teams: ConferenceTeamRow[],
-  games: ConferenceGameRow[],
-  picks: Record<string, string>
-) {
+function computeStandings(teams: ConferenceTeamRow[], games: ConferenceGameRow[], picks: Record<string, string>) {
   const records = new Map(teams.map(t => [t.id, { wins: 0, losses: 0, confWins: 0, confLosses: 0 }]))
-
   for (const game of games) {
     const winnerId = effectiveWinner(game, picks)
     if (!winnerId || !game.home_team_id || !game.away_team_id) continue
     const loserId = winnerId === game.home_team_id ? game.away_team_id : game.home_team_id
-
     const winRec = records.get(winnerId)
     const loseRec = records.get(loserId)
     if (winRec) { winRec.wins++; if (game.conference_game) winRec.confWins++ }
     if (loseRec) { loseRec.losses++; if (game.conference_game) loseRec.confLosses++ }
   }
-
   return teams
     .map(t => ({ team: t, ...records.get(t.id)! }))
     .sort((a, b) => b.confWins - a.confWins || b.wins - a.wins || a.team.name.localeCompare(b.team.name))
+}
+
+// ── Compact team chip ─────────────────────────────────────────────
+
+function TeamChip({
+  team,
+  isWinner,
+  isLoser,
+  isCurrentTeam,
+}: {
+  team: FSGame['home_team'] | null
+  isWinner: boolean
+  isLoser: boolean
+  isCurrentTeam: boolean
+}) {
+  if (!team) return <span className="text-xs text-zinc-300 w-20">TBD</span>
+  const abbr = team.abbreviation ?? team.name.slice(0, 5)
+  return (
+    <div className={`flex items-center gap-1.5 w-24 shrink-0 ${isLoser ? 'opacity-30' : ''}`}>
+      {team.logo_url ? (
+        <img src={team.logo_url} alt={abbr} className="w-4 h-4 object-contain shrink-0" />
+      ) : (
+        <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
+      )}
+      <span className={`text-xs truncate ${isCurrentTeam ? 'font-black' : 'font-medium'} ${isWinner ? 'text-[#3f6212]' : 'text-zinc-700'}`}>
+        {abbr}
+      </span>
+    </div>
+  )
 }
 
 export default function TeamScheduleClient({
@@ -73,7 +87,10 @@ export default function TeamScheduleClient({
   conferenceTeams,
   conferenceGames,
   initialPicks,
+  backHref,
 }: Props) {
+  const router = useRouter()
+
   const [picks, setPicks] = useState<Record<string, string>>(() => {
     const base = { ...initialPicks }
     for (const g of initialGames) {
@@ -93,7 +110,6 @@ export default function TeamScheduleClient({
   function handlePick(gameId: string, winnerTeamId: string) {
     setPicks(prev => ({ ...prev, [gameId]: winnerTeamId }))
     setSavingGame(gameId)
-
     startTransition(async () => {
       const supabase = createClient()
       await supabase.from('full_season_predictions').upsert(
@@ -105,12 +121,10 @@ export default function TeamScheduleClient({
     })
   }
 
-  // Projected record: actual results for completed games + picks for future games
-  let teamWins = 0
-  let teamLosses = 0
-  let gamesLeft = 0
+  let teamWins = 0, teamLosses = 0, gamesLeft = 0
   for (const g of initialGames) {
-    const w = effectiveWinnerFromGame(g, picks)
+    const actual = actualWinnerId(g)
+    const w = actual ?? picks[g.id] ?? null
     if (w) {
       if (w === teamId) teamWins++
       else teamLosses++
@@ -122,6 +136,16 @@ export default function TeamScheduleClient({
   const completedCount = initialGames.filter(g => g.status === 'completed').length
   const predictedFuture = initialGames.filter(g => g.status !== 'completed' && picks[g.id]).length
 
+  // Group by week
+  const byWeek = new Map<number, FSGame[]>()
+  for (const g of initialGames) {
+    const week = g.week ?? 0
+    const list = byWeek.get(week) ?? []
+    list.push(g)
+    byWeek.set(week, list)
+  }
+  const weeks = [...byWeek.keys()].sort((a, b) => a - b)
+
   return (
     <div>
       {/* Record + save status */}
@@ -130,14 +154,8 @@ export default function TeamScheduleClient({
           {(teamWins + teamLosses) > 0 ? (
             <span className="text-sm font-black">
               {teamWins}–{teamLosses}
-              {gamesLeft > 0 && (
-                <span className="text-zinc-400 font-normal ml-1.5">
-                  projected · {gamesLeft} game{gamesLeft !== 1 ? 's' : ''} unpicked
-                </span>
-              )}
-              {gamesLeft === 0 && (
-                <span className="text-[#65a30d] font-normal ml-1.5">projected final record</span>
-              )}
+              {gamesLeft > 0 && <span className="text-zinc-400 font-normal ml-1.5">projected · {gamesLeft} unpicked</span>}
+              {gamesLeft === 0 && <span className="text-[#65a30d] font-normal ml-1.5">projected final</span>}
             </span>
           ) : (
             <span className="text-sm text-zinc-400">Pick winners to build your projected record</span>
@@ -154,62 +172,42 @@ export default function TeamScheduleClient({
         </div>
       </div>
 
-      {/* Progress bar (future games only) */}
+      {/* Progress bar */}
       {initialGames.length > completedCount && (
         <div className="mb-6">
           <div className="flex justify-between text-xs font-medium text-zinc-400 mb-1.5">
-            <span>
-              {completedCount} actual · {predictedFuture} predicted
-            </span>
+            <span>{completedCount} actual · {predictedFuture} predicted</span>
             <span>{initialGames.length - completedCount - predictedFuture} remaining</span>
           </div>
           <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden flex">
-            {/* Actual results portion */}
-            <div
-              className="h-full bg-zinc-400 rounded-l-full transition-all duration-300"
-              style={{ width: `${(completedCount / initialGames.length) * 100}%` }}
-            />
-            {/* Predicted portion */}
-            <div
-              className="h-full bg-[#84cc16] transition-all duration-300"
-              style={{ width: `${(predictedFuture / initialGames.length) * 100}%` }}
-            />
-          </div>
-          <div className="flex gap-4 mt-1.5 text-xs text-zinc-400">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-400 inline-block" />Actual</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#84cc16] inline-block" />Your picks</span>
+            <div className="h-full bg-zinc-400 transition-all duration-300" style={{ width: `${(completedCount / initialGames.length) * 100}%` }} />
+            <div className="h-full bg-[#84cc16] transition-all duration-300" style={{ width: `${(predictedFuture / initialGames.length) * 100}%` }} />
           </div>
         </div>
       )}
 
       {/* Conference standings */}
       {conferenceTeams.length > 1 && (
-        <div className="mb-8 rounded-2xl border border-zinc-200 overflow-hidden">
-          <div className="px-5 py-3 bg-zinc-50 border-b border-zinc-100">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-              Conference Standings
-              {completedCount > 0 && <span className="ml-2 font-normal text-zinc-400 normal-case">(actual + projected)</span>}
+        <div className="mb-6 rounded-xl border border-zinc-200 overflow-hidden">
+          <div className="px-4 py-2.5 bg-zinc-50 border-b border-zinc-100">
+            <h2 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+              Conference Standings {completedCount > 0 && <span className="font-normal normal-case text-zinc-300">· actual + projected</span>}
             </h2>
           </div>
           <div className="divide-y divide-zinc-100">
             {standings.map((row, idx) => {
-              const isCurrentTeam = row.team.id === teamId
+              const isCurrent = row.team.id === teamId
               return (
-                <div
-                  key={row.team.id}
-                  className={`flex items-center gap-3 px-5 py-2.5 text-sm ${isCurrentTeam ? 'bg-[#84cc16]/10' : ''}`}
-                >
-                  <span className="w-5 text-zinc-400 font-medium text-xs shrink-0">{idx + 1}</span>
+                <div key={row.team.id} className={`flex items-center gap-2 px-4 py-2 text-xs ${isCurrent ? 'bg-[#84cc16]/10' : ''}`}>
+                  <span className="w-4 text-zinc-400 shrink-0">{idx + 1}</span>
                   {row.team.logo_url ? (
-                    <img src={row.team.logo_url} alt={row.team.name} className="w-5 h-5 object-contain shrink-0" />
+                    <img src={row.team.logo_url} alt={row.team.name} className="w-4 h-4 object-contain shrink-0" />
                   ) : (
-                    <div className="w-5 h-5 rounded-full bg-zinc-200 shrink-0" />
+                    <div className="w-4 h-4 rounded-full bg-zinc-200 shrink-0" />
                   )}
-                  <span className={`flex-1 truncate font-${isCurrentTeam ? 'black' : 'medium'} ${isCurrentTeam ? 'text-black' : 'text-zinc-700'}`}>
-                    {row.team.name}
-                  </span>
-                  <span className="text-zinc-500 text-xs tabular-nums">{row.wins}–{row.losses}</span>
-                  <span className="text-zinc-400 text-xs tabular-nums w-16 text-right">{row.confWins}–{row.confLosses} conf</span>
+                  <span className={`flex-1 truncate ${isCurrent ? 'font-black' : 'font-medium'} text-zinc-700`}>{row.team.name}</span>
+                  <span className="text-zinc-500 tabular-nums">{row.wins}–{row.losses}</span>
+                  <span className="text-zinc-300 tabular-nums w-14 text-right">{row.confWins}–{row.confLosses} conf</span>
                 </div>
               )
             })}
@@ -217,127 +215,137 @@ export default function TeamScheduleClient({
         </div>
       )}
 
-      {/* Game list */}
+      {/* Game list — compact rows */}
       {initialGames.length === 0 ? (
         <div className="p-10 rounded-2xl bg-zinc-50 border border-zinc-200 text-center">
           <p className="text-zinc-500 font-medium">No schedule loaded yet.</p>
           <p className="text-sm text-zinc-400 mt-1">An admin needs to run the schedule sync.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {initialGames.map(game => {
-            const isCompleted = game.status === 'completed'
-            const actualWinnerId = actualWinner(game)
-            const pickedWinnerId = picks[game.id] ?? null
-            const displayWinnerId = actualWinnerId ?? pickedWinnerId
-
+        <div className="rounded-xl border border-zinc-200 overflow-hidden">
+          {weeks.map((week, wi) => {
+            const weekGames = byWeek.get(week)!
             return (
-              <div
-                key={game.id}
-                className="rounded-2xl border border-zinc-200 bg-white overflow-hidden"
-              >
-                {/* Meta */}
-                <div className="flex items-center gap-3 px-5 py-2 bg-zinc-50 border-b border-zinc-100 text-xs font-medium text-zinc-400">
-                  <span className="bg-zinc-200 text-zinc-600 px-2 py-0.5 rounded-full">Wk {game.week}</span>
-                  {game.game_date && <span>{formatDate(game.game_date)}</span>}
-                  {game.conference_game && <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Conf</span>}
-                  {isCompleted && <span className="px-2 py-0.5 rounded-full bg-zinc-700 text-white">Final</span>}
-                  {savingGame === game.id && <span className="ml-auto text-[#84cc16]">Saving…</span>}
+              <div key={week}>
+                <div className="px-4 py-1.5 bg-zinc-50 border-b border-zinc-100">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Week {week}</span>
                 </div>
+                {weekGames.map((game, gi) => {
+                  const isCompleted = game.status === 'completed'
+                  const actual = actualWinnerId(game)
+                  const pickedId = picks[game.id] ?? null
+                  const displayWinnerId = actual ?? pickedId
+                  const awayAbbr = game.away_team?.abbreviation ?? game.away_team?.name.slice(0, 5) ?? '?'
+                  const homeAbbr = game.home_team?.abbreviation ?? game.home_team?.name.slice(0, 5) ?? '?'
+                  const isSaving = savingGame === game.id
+                  const isLastInWeek = gi === weekGames.length - 1
+                  const isLastWeek = wi === weeks.length - 1
 
-                {/* Teams */}
-                <div className="flex items-stretch gap-3 px-5 py-4">
-                  <TeamButton
-                    team={game.away_team}
-                    score={isCompleted ? game.away_team_points : null}
-                    isWinner={displayWinnerId === game.away_team?.id}
-                    isLoser={displayWinnerId !== null && displayWinnerId !== game.away_team?.id}
-                    isActual={isCompleted}
-                    isCurrentTeam={game.away_team?.id === teamId}
-                    onClick={() => !isCompleted && game.away_team && handlePick(game.id, game.away_team.id)}
-                  />
-                  <div className="flex flex-col items-center justify-center shrink-0 text-zinc-300 font-semibold text-xs px-1">
-                    {game.neutral_site ? 'vs' : '@'}
-                  </div>
-                  <TeamButton
-                    team={game.home_team}
-                    score={isCompleted ? game.home_team_points : null}
-                    isWinner={displayWinnerId === game.home_team?.id}
-                    isLoser={displayWinnerId !== null && displayWinnerId !== game.home_team?.id}
-                    isActual={isCompleted}
-                    isCurrentTeam={game.home_team?.id === teamId}
-                    onClick={() => !isCompleted && game.home_team && handlePick(game.id, game.home_team.id)}
-                  />
-                </div>
+                  return (
+                    <div
+                      key={game.id}
+                      className={`flex items-center gap-3 px-4 py-2.5 ${!isLastInWeek || !isLastWeek ? 'border-b border-zinc-100' : ''} hover:bg-zinc-50/60 transition-colors`}
+                    >
+                      {/* Date */}
+                      <div className="shrink-0 w-14 text-right">
+                        <span className="text-[10px] text-zinc-400">
+                          {game.game_date ? formatShortDate(game.game_date) : `Wk ${week}`}
+                        </span>
+                      </div>
+
+                      {/* Badges */}
+                      <div className="flex gap-1 shrink-0 w-12">
+                        {game.conference_game && <span className="text-[9px] font-bold text-zinc-300 uppercase">CONF</span>}
+                        {isCompleted && <span className="text-[9px] font-bold text-zinc-400 uppercase">Final</span>}
+                      </div>
+
+                      {/* Matchup */}
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <TeamChip
+                          team={game.away_team}
+                          isWinner={displayWinnerId === game.away_team?.id}
+                          isLoser={displayWinnerId !== null && displayWinnerId !== game.away_team?.id}
+                          isCurrentTeam={game.away_team?.id === teamId}
+                        />
+                        <span className="text-[10px] text-zinc-300 shrink-0">
+                          {game.neutral_site ? 'vs' : '@'}
+                        </span>
+                        <TeamChip
+                          team={game.home_team}
+                          isWinner={displayWinnerId === game.home_team?.id}
+                          isLoser={displayWinnerId !== null && displayWinnerId !== game.home_team?.id}
+                          isCurrentTeam={game.home_team?.id === teamId}
+                        />
+                      </div>
+
+                      {/* Pick area */}
+                      <div className="shrink-0 flex items-center justify-end w-28">
+                        {isCompleted ? (
+                          <span className="text-xs font-semibold text-zinc-500 tabular-nums">
+                            {game.away_team_points}–{game.home_team_points}
+                          </span>
+                        ) : isSaving ? (
+                          <span className="text-[10px] text-zinc-300">Saving…</span>
+                        ) : pickedId ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-bold text-[#65a30d]">
+                              {pickedId === game.away_team?.id ? awayAbbr : homeAbbr}
+                            </span>
+                            <span className="text-[10px] text-[#65a30d] font-black">✓</span>
+                            <button
+                              onClick={() => {
+                                const newPicks = { ...picks }
+                                delete newPicks[game.id]
+                                setPicks(newPicks)
+                              }}
+                              className="text-[10px] text-zinc-300 hover:text-zinc-500 ml-1 leading-none"
+                              title="Clear pick"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
+                              className="px-2 py-0.5 rounded-full border border-zinc-200 text-[11px] font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
+                            >
+                              {awayAbbr}
+                            </button>
+                            <button
+                              onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
+                              className="px-2 py-0.5 rounded-full border border-zinc-200 text-[11px] font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
+                            >
+                              {homeAbbr}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )
           })}
         </div>
       )}
-    </div>
-  )
-}
 
-function TeamButton({
-  team,
-  score,
-  isWinner,
-  isLoser,
-  isActual,
-  isCurrentTeam,
-  onClick,
-}: {
-  team: FSGame['home_team']
-  score: number | null
-  isWinner: boolean
-  isLoser: boolean
-  isActual: boolean
-  isCurrentTeam: boolean
-  onClick: () => void
-}) {
-  if (!team) {
-    return (
-      <div className="flex-1 px-4 py-3 rounded-xl bg-zinc-50 text-zinc-300 text-sm flex items-center gap-2">
-        <div className="w-5 h-5 rounded-full bg-zinc-200 shrink-0" />
-        <span>TBD</span>
-      </div>
-    )
-  }
-
-  let cls = 'flex-1 flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-left transition-all border '
-  cls += isActual ? 'cursor-default ' : 'cursor-pointer '
-
-  if (isWinner && isActual) {
-    cls += 'bg-zinc-800 text-white border-zinc-800'
-  } else if (isWinner) {
-    cls += 'bg-[#84cc16] border-[#84cc16] text-black shadow-sm'
-  } else if (isLoser) {
-    cls += 'bg-zinc-50 border-zinc-100 text-zinc-300'
-  } else {
-    cls += 'bg-white border-zinc-200 hover:border-[#84cc16] hover:shadow-sm text-zinc-800'
-  }
-
-  return (
-    <button onClick={onClick} disabled={isActual} className={cls}>
-      {team.logo_url ? (
-        <img src={team.logo_url} alt={team.name} className="w-6 h-6 object-contain shrink-0" />
-      ) : (
-        <div className="w-6 h-6 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
-      )}
-      <div className="min-w-0 flex-1">
-        <span className={`block truncate leading-tight ${isCurrentTeam && !isLoser ? 'font-black' : ''}`}>
-          {team.name}
-        </span>
-        <div className="flex items-center gap-2 mt-0.5">
-          {score !== null && (
-            <span className={`text-xs font-bold ${isWinner ? 'opacity-90' : 'opacity-50'}`}>{score}</span>
-          )}
-          {!isActual && isWinner && <span className="text-xs font-bold opacity-70">W</span>}
-          {!isActual && isLoser && <span className="text-xs font-medium opacity-50">L</span>}
-          {isActual && isWinner && <span className="text-xs font-bold opacity-70">W</span>}
-          {isActual && isLoser && <span className="text-xs font-medium opacity-50">L</span>}
+      {/* Done / Save Picks */}
+      {initialGames.length > 0 && (
+        <div className="mt-6 pt-5 border-t border-zinc-100 flex items-center justify-between gap-4">
+          <p className="text-sm text-zinc-400">
+            {gamesLeft === 0
+              ? 'All games picked — picks save automatically.'
+              : `${gamesLeft} game${gamesLeft !== 1 ? 's' : ''} still unpicked.`}
+          </p>
+          <button
+            onClick={() => router.push(backHref)}
+            className="shrink-0 px-5 py-2 bg-[#84cc16] text-black font-bold text-sm rounded-xl hover:bg-[#65a30d] transition-colors"
+          >
+            Done — Save Picks
+          </button>
         </div>
-      </div>
-    </button>
+      )}
+    </div>
   )
 }

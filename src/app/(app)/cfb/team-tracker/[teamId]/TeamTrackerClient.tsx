@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type { TTGame } from '@/lib/data/team-tracker'
 import { saveTeamTrackerPickAction } from './actions'
 
@@ -9,71 +10,46 @@ interface Props {
   teamId: string
   games: TTGame[]
   season: number
+  backHref: string
 }
 
-function formatDate(dateStr: string | null): string {
+function formatShortDate(dateStr: string | null): string {
   if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 type Team = NonNullable<TTGame['home_team']>
 
-function TeamButton({
+function TeamChip({
   team,
-  score,
   isWinner,
   isLoser,
-  isActual,
-  isTrackedTeam,
-  onClick,
+  isCurrentTeam,
 }: {
   team: Team | null
-  score: number | null
   isWinner: boolean
   isLoser: boolean
-  isActual: boolean
-  isTrackedTeam: boolean
-  onClick: () => void
+  isCurrentTeam: boolean
 }) {
-  if (!team) {
-    return (
-      <div className="flex-1 px-4 py-3 rounded-xl bg-zinc-50 text-zinc-300 text-sm flex items-center gap-2">
-        <div className="w-5 h-5 rounded-full bg-zinc-200 shrink-0" />
-        <span>TBD</span>
-      </div>
-    )
-  }
-
-  let cls = 'flex-1 flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-left transition-all border '
-  cls += isActual ? 'cursor-default ' : 'cursor-pointer '
-
-  if (isWinner && isActual) cls += 'bg-zinc-800 text-white border-zinc-800'
-  else if (isWinner) cls += 'bg-[#84cc16] border-[#84cc16] text-black shadow-sm'
-  else if (isLoser) cls += 'bg-zinc-50 border-zinc-100 text-zinc-300'
-  else cls += 'bg-white border-zinc-200 hover:border-[#84cc16] hover:shadow-sm text-zinc-800'
-
+  if (!team) return <span className="text-xs text-zinc-300 w-20">TBD</span>
+  const abbr = team.abbreviation ?? team.name.slice(0, 5)
   return (
-    <button onClick={onClick} disabled={isActual} className={cls}>
+    <div className={`flex items-center gap-1.5 w-24 shrink-0 ${isLoser ? 'opacity-30' : ''}`}>
       {team.logo_url ? (
-        <img src={team.logo_url} alt={team.name} className="w-6 h-6 object-contain shrink-0" />
+        <img src={team.logo_url} alt={abbr} className="w-4 h-4 object-contain shrink-0" />
       ) : (
-        <div className="w-6 h-6 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
+        <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
       )}
-      <div className="min-w-0 flex-1">
-        <span className={`block truncate leading-tight ${isTrackedTeam && !isLoser ? 'font-black' : ''}`}>
-          {team.name}
-        </span>
-        {score !== null && (
-          <span className={`text-xs font-bold block mt-0.5 ${isWinner ? 'opacity-90' : 'opacity-40'}`}>{score}</span>
-        )}
-      </div>
-      {isWinner && <span className={`text-xs font-bold shrink-0 ${isActual ? 'opacity-60' : ''}`}>W</span>}
-      {isLoser && <span className="text-xs font-medium shrink-0 opacity-40">L</span>}
-    </button>
+      <span className={`text-xs truncate ${isCurrentTeam ? 'font-black' : 'font-medium'} ${isWinner ? 'text-[#3f6212]' : 'text-zinc-700'}`}>
+        {abbr}
+      </span>
+    </div>
   )
 }
 
-export default function TeamTrackerClient({ teamId, games: initialGames, season }: Props) {
+export default function TeamTrackerClient({ teamId, games: initialGames, season, backHref }: Props) {
+  const router = useRouter()
+
   const [picks, setPicks] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {}
     for (const g of initialGames) {
@@ -85,18 +61,17 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season 
   const [lastSaved, setLastSaved] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
-  function handlePick(gameId: string, teamIdPick: string, trackedTeamId: string) {
+  function handlePick(gameId: string, teamIdPick: string) {
     setPicks(prev => ({ ...prev, [gameId]: teamIdPick }))
     setSavingGame(gameId)
-
     startTransition(async () => {
-      await saveTeamTrackerPickAction(trackedTeamId, gameId, teamIdPick, season)
+      await saveTeamTrackerPickAction(teamId, gameId, teamIdPick, season)
       setSavingGame(null)
       setLastSaved(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }))
     })
   }
 
-  // Compute projected record: actual results + user picks for future games
+  // Compute projected record
   let projWins = 0, projLosses = 0, gamesLeft = 0
   for (const g of initialGames) {
     const winner = g.actual_winner ?? picks[g.id] ?? null
@@ -111,7 +86,7 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season 
   const completedCount = initialGames.filter(g => g.actual_winner !== null).length
   const predictedFuture = initialGames.filter(g => !g.actual_winner && picks[g.id]).length
 
-  // Group games by week
+  // Group by week
   const byWeek = new Map<number, TTGame[]>()
   for (const g of initialGames) {
     const week = g.week ?? 0
@@ -129,17 +104,11 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season 
           {(projWins + projLosses) > 0 ? (
             <span className="text-sm font-black">
               {projWins}–{projLosses}
-              {gamesLeft > 0 && (
-                <span className="text-zinc-400 font-normal ml-1.5">
-                  projected · {gamesLeft} game{gamesLeft !== 1 ? 's' : ''} unpicked
-                </span>
-              )}
-              {gamesLeft === 0 && (
-                <span className="text-[#65a30d] font-normal ml-1.5">projected final</span>
-              )}
+              {gamesLeft > 0 && <span className="text-zinc-400 font-normal ml-1.5">projected · {gamesLeft} unpicked</span>}
+              {gamesLeft === 0 && <span className="text-[#65a30d] font-normal ml-1.5">projected final</span>}
             </span>
           ) : (
-            <span className="text-sm text-zinc-400">Click a team to start picking</span>
+            <span className="text-sm text-zinc-400">Click a team abbreviation to pick</span>
           )}
         </div>
         <div className="text-xs text-zinc-400 flex items-center gap-1.5">
@@ -159,110 +128,151 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season 
             <span>{initialGames.length - completedCount - predictedFuture} remaining</span>
           </div>
           <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden flex">
-            <div
-              className="h-full bg-zinc-400 transition-all duration-300"
-              style={{ width: `${(completedCount / initialGames.length) * 100}%` }}
-            />
-            <div
-              className="h-full bg-[#84cc16] transition-all duration-300"
-              style={{ width: `${(predictedFuture / initialGames.length) * 100}%` }}
-            />
-          </div>
-          <div className="flex gap-4 mt-1.5 text-xs text-zinc-400">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-zinc-400 inline-block" />Actual results
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-[#84cc16] inline-block" />Your picks
-            </span>
+            <div className="h-full bg-zinc-400 transition-all duration-300" style={{ width: `${(completedCount / initialGames.length) * 100}%` }} />
+            <div className="h-full bg-[#84cc16] transition-all duration-300" style={{ width: `${(predictedFuture / initialGames.length) * 100}%` }} />
           </div>
         </div>
       )}
 
-      {/* Games by week */}
+      {/* Game list — compact rows */}
       {initialGames.length === 0 ? (
         <div className="p-10 rounded-2xl bg-zinc-50 border border-zinc-200 text-center">
           <p className="text-zinc-500 font-medium">No schedule loaded yet.</p>
           <p className="text-sm text-zinc-400 mt-1">An admin needs to run the schedule sync.</p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {weeks.map(week => {
+        <div className="rounded-xl border border-zinc-200 overflow-hidden">
+          {weeks.map((week, wi) => {
             const weekGames = byWeek.get(week)!
             return (
               <div key={week}>
-                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-3">Week {week}</p>
-                <div className="space-y-3">
-                  {weekGames.map(game => {
-                    const isCompleted = game.actual_winner !== null
-                    const pickedId = picks[game.id] ?? null
-                    const displayWinnerId = game.actual_winner ?? pickedId
-
-                    // For completed games: was the user's pick correct?
-                    const pickResult = isCompleted && pickedId
-                      ? pickedId === game.actual_winner ? 'correct' : 'incorrect'
-                      : null
-
-                    return (
-                      <div
-                        key={game.id}
-                        className={`rounded-2xl border overflow-hidden ${
-                          pickResult === 'correct'
-                            ? 'border-[#84cc16]/60'
-                            : pickResult === 'incorrect'
-                              ? 'border-red-200'
-                              : 'border-zinc-200'
-                        } bg-white`}
-                      >
-                        {/* Meta row */}
-                        <div className="flex items-center gap-3 px-5 py-2 bg-zinc-50 border-b border-zinc-100 text-xs font-medium text-zinc-400">
-                          {game.game_date && <span>{formatDate(game.game_date)}</span>}
-                          {game.conference_game && (
-                            <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Conf</span>
-                          )}
-                          {isCompleted && (
-                            <span className="px-2 py-0.5 rounded-full bg-zinc-700 text-white">Final</span>
-                          )}
-                          {pickResult === 'correct' && (
-                            <span className="ml-auto px-2 py-0.5 rounded-full bg-[#84cc16]/20 text-[#65a30d] font-bold">Correct pick</span>
-                          )}
-                          {pickResult === 'incorrect' && (
-                            <span className="ml-auto px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-bold">Wrong pick</span>
-                          )}
-                          {savingGame === game.id && <span className="ml-auto text-[#84cc16]">Saving…</span>}
-                        </div>
-
-                        {/* Team buttons */}
-                        <div className="flex items-stretch gap-3 px-5 py-4">
-                          <TeamButton
-                            team={game.away_team}
-                            score={isCompleted ? game.away_team_points : null}
-                            isWinner={displayWinnerId === game.away_team?.id}
-                            isLoser={displayWinnerId !== null && displayWinnerId !== game.away_team?.id}
-                            isActual={isCompleted}
-                            isTrackedTeam={game.away_team?.id === teamId}
-                            onClick={() => !isCompleted && game.away_team && handlePick(game.id, game.away_team.id, teamId)}
-                          />
-                          <div className="flex flex-col items-center justify-center shrink-0 text-zinc-300 font-semibold text-xs px-1">
-                            {game.neutral_site ? 'vs' : '@'}
-                          </div>
-                          <TeamButton
-                            team={game.home_team}
-                            score={isCompleted ? game.home_team_points : null}
-                            isWinner={displayWinnerId === game.home_team?.id}
-                            isLoser={displayWinnerId !== null && displayWinnerId !== game.home_team?.id}
-                            isActual={isCompleted}
-                            isTrackedTeam={game.home_team?.id === teamId}
-                            onClick={() => !isCompleted && game.home_team && handlePick(game.id, game.home_team.id, teamId)}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
+                <div className="px-4 py-1.5 bg-zinc-50 border-b border-zinc-100">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Week {week || '?'}</span>
                 </div>
+                {weekGames.map((game, gi) => {
+                  const isCompleted = game.actual_winner !== null
+                  const pickedId = picks[game.id] ?? null
+                  const displayWinnerId = game.actual_winner ?? pickedId
+                  const awayAbbr = game.away_team?.abbreviation ?? game.away_team?.name.slice(0, 5) ?? '?'
+                  const homeAbbr = game.home_team?.abbreviation ?? game.home_team?.name.slice(0, 5) ?? '?'
+                  const isSaving = savingGame === game.id
+                  const isLastInWeek = gi === weekGames.length - 1
+                  const isLastWeek = wi === weeks.length - 1
+
+                  // For completed games with a user pick: was it correct?
+                  const pickResult = isCompleted && pickedId
+                    ? pickedId === game.actual_winner ? 'correct' : 'incorrect'
+                    : null
+
+                  return (
+                    <div
+                      key={game.id}
+                      className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${
+                        pickResult === 'correct' ? 'bg-[#84cc16]/5' :
+                        pickResult === 'incorrect' ? 'bg-red-50/60' :
+                        'hover:bg-zinc-50/60'
+                      } ${!isLastInWeek || !isLastWeek ? 'border-b border-zinc-100' : ''}`}
+                    >
+                      {/* Date */}
+                      <div className="shrink-0 w-14 text-right">
+                        <span className="text-[10px] text-zinc-400">
+                          {game.game_date ? formatShortDate(game.game_date) : `Wk ${week || '?'}`}
+                        </span>
+                      </div>
+
+                      {/* Badges */}
+                      <div className="flex gap-1 shrink-0 w-14">
+                        {game.conference_game && <span className="text-[9px] font-bold text-zinc-300 uppercase">CONF</span>}
+                        {isCompleted && <span className="text-[9px] font-bold text-zinc-400 uppercase">Final</span>}
+                        {pickResult === 'correct' && <span className="text-[9px] font-bold text-[#65a30d] uppercase">✓</span>}
+                        {pickResult === 'incorrect' && <span className="text-[9px] font-bold text-red-500 uppercase">✗</span>}
+                      </div>
+
+                      {/* Matchup */}
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <TeamChip
+                          team={game.away_team}
+                          isWinner={displayWinnerId === game.away_team?.id}
+                          isLoser={displayWinnerId !== null && displayWinnerId !== game.away_team?.id}
+                          isCurrentTeam={game.away_team?.id === teamId}
+                        />
+                        <span className="text-[10px] text-zinc-300 shrink-0">
+                          {game.neutral_site ? 'vs' : '@'}
+                        </span>
+                        <TeamChip
+                          team={game.home_team}
+                          isWinner={displayWinnerId === game.home_team?.id}
+                          isLoser={displayWinnerId !== null && displayWinnerId !== game.home_team?.id}
+                          isCurrentTeam={game.home_team?.id === teamId}
+                        />
+                      </div>
+
+                      {/* Pick area */}
+                      <div className="shrink-0 flex items-center justify-end w-28">
+                        {isCompleted ? (
+                          <span className="text-xs font-semibold text-zinc-500 tabular-nums">
+                            {game.away_team_points}–{game.home_team_points}
+                          </span>
+                        ) : isSaving ? (
+                          <span className="text-[10px] text-zinc-300">Saving…</span>
+                        ) : pickedId ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-bold text-[#65a30d]">
+                              {pickedId === game.away_team?.id ? awayAbbr : homeAbbr}
+                            </span>
+                            <span className="text-[10px] text-[#65a30d] font-black">✓</span>
+                            <button
+                              onClick={() => {
+                                const newPicks = { ...picks }
+                                delete newPicks[game.id]
+                                setPicks(newPicks)
+                              }}
+                              className="text-[10px] text-zinc-300 hover:text-zinc-500 ml-1 leading-none"
+                              title="Clear pick"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
+                              className="px-2 py-0.5 rounded-full border border-zinc-200 text-[11px] font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
+                            >
+                              {awayAbbr}
+                            </button>
+                            <button
+                              onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
+                              className="px-2 py-0.5 rounded-full border border-zinc-200 text-[11px] font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
+                            >
+                              {homeAbbr}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Done / Save Picks */}
+      {initialGames.length > 0 && (
+        <div className="mt-6 pt-5 border-t border-zinc-100 flex items-center justify-between gap-4">
+          <p className="text-sm text-zinc-400">
+            {gamesLeft === 0
+              ? 'All games picked — picks save automatically.'
+              : `${gamesLeft} game${gamesLeft !== 1 ? 's' : ''} still unpicked.`}
+          </p>
+          <button
+            onClick={() => router.push(backHref)}
+            className="shrink-0 px-5 py-2 bg-[#84cc16] text-black font-bold text-sm rounded-xl hover:bg-[#65a30d] transition-colors"
+          >
+            Done — Save Picks
+          </button>
         </div>
       )}
     </div>

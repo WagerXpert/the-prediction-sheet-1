@@ -94,6 +94,7 @@ export default async function TeamTrackerTeamPage({
         teamId={teamId}
         games={games}
         season={CURRENT_SEASON}
+        backHref="/cfb/team-tracker"
       />
     </div>
   )

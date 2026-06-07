@@ -3,185 +3,91 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
-import { getUserScoreSummary } from '@/lib/data/scores'
-import { getSeasonLeaderboard } from '@/lib/data/leaderboard'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: profile }, scoreSummary, leaderboard] = await Promise.all([
-    supabase.from('profiles').select('display_name').eq('id', user.id).single(),
-    getUserScoreSummary(user.id),
-    getSeasonLeaderboard(),
-  ])
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', user.id)
+    .single()
 
   const name = profile?.display_name ?? user.email?.split('@')[0] ?? 'Predictor'
-  const myRank = leaderboard.find((e) => e.userId === user.id)?.rank ?? null
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-black">Welcome back, {name} 👋</h1>
-        <p className="text-zinc-500 mt-1">Your {CURRENT_SEASON} CFB Prediction Sheet</p>
+    <div className="max-w-4xl mx-auto px-6 py-10">
+      <div className="mb-10">
+        <h1 className="text-3xl font-black">Welcome back, {name}</h1>
+        <p className="text-zinc-500 mt-1">{CURRENT_SEASON} CFB Prediction Sheet</p>
       </div>
 
-      {/* Score card */}
-      <div className="mb-8 p-6 rounded-2xl border border-zinc-200 bg-white">
-        <div className="flex items-start justify-between mb-4">
-          <h2 className="text-base font-black">Your Score</h2>
-          {myRank !== null && (
-            <span className="px-3 py-1 rounded-full bg-black text-white text-sm font-bold">
-              #{myRank} overall
-            </span>
-          )}
-        </div>
-
-        {!scoreSummary.hasAnyPredictions ? (
-          <p className="text-zinc-400 text-sm">
-            No predictions submitted yet — make your picks below to appear on the leaderboard.
+      {/* Featured: Full Season Mode */}
+      <Link
+        href="/cfb/full-season"
+        className="flex flex-col sm:flex-row items-start sm:items-center gap-5 p-7 mb-5 rounded-2xl bg-black text-white hover:bg-zinc-900 transition-all group"
+      >
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-bold tracking-[0.2em] uppercase text-[#84cc16]">Featured Mode</span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#84cc16] text-black">Main</span>
+          </div>
+          <h2 className="text-2xl font-black">Full Season Mode</h2>
+          <p className="text-zinc-400 text-sm mt-1.5 leading-relaxed max-w-lg">
+            Pick every game for your selected conferences. Generates conference standings,
+            conference championships, and your full CFP playoff bracket — all from your picks.
           </p>
-        ) : (
-          <>
-            <p className="text-4xl font-black mb-4">
-              {scoreSummary.totalPoints}{' '}
-              <span className="text-lg font-semibold text-zinc-400">pts</span>
-            </p>
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-zinc-100">
-              <ScoreBreakdown
-                label="Game Picks"
-                points={scoreSummary.gamePoints}
-                detail={
-                  scoreSummary.gameGraded > 0
-                    ? `${scoreSummary.gameCorrect}/${scoreSummary.gameGraded} correct`
-                    : 'Not yet graded'
-                }
-              />
-              <ScoreBreakdown
-                label="Season Records"
-                points={scoreSummary.recordPoints}
-                detail={
-                  scoreSummary.recordGraded > 0
-                    ? `${scoreSummary.recordCorrect}/${scoreSummary.recordGraded} correct`
-                    : 'Not yet graded'
-                }
-              />
-              <ScoreBreakdown
-                label="Standings"
-                points={scoreSummary.standingsPoints}
-                detail="End of season"
-              />
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Pre-season banner */}
-      <div className="mb-8 flex items-start gap-3 p-4 rounded-2xl bg-[#84cc16]/10 border border-[#84cc16]/30">
-        <span className="text-2xl mt-0.5">🏈</span>
-        <div>
-          <p className="font-semibold text-sm">Pre-Season Mode Active</p>
-          <p className="text-sm text-zinc-600 mt-0.5">
-            All predictions are open now. Lock in your season records, conference standings, and
-            game picks before the {CURRENT_SEASON} season kicks off.
-          </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {['Game Picks', 'Conf Standings', 'Conf Championships', 'CFP Bracket'].map(tag => (
+              <span key={tag} className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white/10 text-zinc-300">
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+        <span className="text-[#84cc16] text-2xl font-black group-hover:translate-x-1 transition-transform shrink-0">→</span>
+      </Link>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <PredictionCard
-          emoji="📊"
-          title="Season Records"
-          desc={`Forecast each team's final win-loss record for ${CURRENT_SEASON}.`}
-          href="/cfb/season-records"
-          open
-          cta="Make Predictions"
-        />
-        <PredictionCard
-          emoji="🏆"
-          title="Conference Standings"
-          desc="Rank every team in their conference from top to bottom."
-          href="/cfb/standings"
-          open
-          cta="Make Predictions"
-        />
-        <PredictionCard
-          emoji="🎯"
-          title="Game Picks"
-          desc="Pick the winner for every game, week by week."
-          href="/cfb/game-picks"
-          open
-          cta="Make Predictions"
-        />
-      </div>
-    </div>
-  )
-}
-
-function ScoreBreakdown({
-  label,
-  points,
-  detail,
-}: {
-  label: string
-  points: number
-  detail: string
-}) {
-  return (
-    <div>
-      <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-2xl font-black">{points}</p>
-      <p className="text-xs text-zinc-400 mt-0.5">{detail}</p>
-    </div>
-  )
-}
-
-function PredictionCard({
-  emoji,
-  title,
-  desc,
-  href,
-  open,
-  cta,
-}: {
-  emoji: string
-  title: string
-  desc: string
-  href: string
-  open: boolean
-  cta: string
-}) {
-  return (
-    <div
-      className={`flex flex-col gap-3 p-6 rounded-2xl border transition-all ${
-        open
-          ? 'border-zinc-200 hover:border-[#84cc16] hover:shadow-md'
-          : 'border-zinc-100 bg-zinc-50 opacity-70'
-      }`}
-    >
-      <span className="text-3xl">{emoji}</span>
-      <div className="flex-1">
-        <h3 className="text-lg font-bold">{title}</h3>
-        <p className="text-sm text-zinc-500 mt-1 leading-relaxed">{desc}</p>
-      </div>
-      {open ? (
+      {/* Other two modes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <Link
-          href={href}
-          className="inline-block px-4 py-2 bg-[#84cc16] text-black font-semibold text-sm rounded-lg hover:bg-[#65a30d] transition-colors text-center"
+          href="/cfb/team-tracker"
+          className="flex flex-col gap-4 p-6 rounded-2xl border border-zinc-200 hover:border-[#84cc16] hover:shadow-md transition-all group"
         >
-          {cta}
+          <div className="flex-1">
+            <p className="text-xs font-bold tracking-[0.2em] uppercase text-zinc-400 mb-2">Team Mode</p>
+            <h2 className="text-xl font-black">Team Season Tracker</h2>
+            <p className="text-sm text-zinc-500 mt-1.5 leading-relaxed">
+              Follow any FBS team all season. Predict their results week by week and track
+              how accurate your picks are as games are played.
+            </p>
+          </div>
+          <span className="text-sm font-bold text-zinc-400 group-hover:text-[#84cc16] transition-colors">
+            Pick a team →
+          </span>
         </Link>
-      ) : (
-        <span className="inline-block px-4 py-2 bg-zinc-200 text-zinc-500 font-semibold text-sm rounded-lg text-center">
-          {cta}
-        </span>
-      )}
+
+        <Link
+          href="/cfb/playoff"
+          className="flex flex-col gap-4 p-6 rounded-2xl border border-zinc-200 hover:border-[#84cc16] hover:shadow-md transition-all group"
+        >
+          <div className="flex-1">
+            <p className="text-xs font-bold tracking-[0.2em] uppercase text-zinc-400 mb-2">Playoff Mode</p>
+            <h2 className="text-xl font-black">CFP Bracket</h2>
+            <p className="text-sm text-zinc-500 mt-1.5 leading-relaxed">
+              Jump straight to the 12-team CFP bracket. Run a sim to auto-fill the field
+              or hand-pick your teams, then predict round by round.
+            </p>
+          </div>
+          <span className="text-sm font-bold text-zinc-400 group-hover:text-[#84cc16] transition-colors">
+            Build bracket →
+          </span>
+        </Link>
+      </div>
     </div>
   )
 }

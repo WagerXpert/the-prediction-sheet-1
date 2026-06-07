@@ -87,6 +87,7 @@ export default async function FullSeasonTeamPage({
         conferenceGames={standingsData.games}
         initialPicks={standingsData.picks}
         season={CURRENT_SEASON}
+        backHref="/cfb/full-season"
       />
     </div>
   )
