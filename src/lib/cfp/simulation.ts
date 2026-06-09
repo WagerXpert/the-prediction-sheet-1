@@ -19,16 +19,16 @@ function seededRandom(seed: string): number {
 }
 
 // Logistic win probability based on rating difference.
-// scale=15 produces:
+// scale=9 produces:
 //   0  pt gap  → 53% (home adv only)
-//  10 pt gap   → 66%
-//  20 pt gap   → 79%
-//  30 pt gap   → 88%
-//  40 pt gap   → 93%   (elite 98 vs bottom 55 ≈ 93%, upset ≈ 7%)
+//  10 pt gap   → 75%
+//  20 pt gap   → 89%
+//  30 pt gap   → 97%
+//  40 pt gap   → 99%   (elite 99 vs bottom 55 ≈ 99%, upsets are rare)
 function winProbability(homeRating: number, awayRating: number, neutralSite = false): number {
   const homeAdv = neutralSite ? 0 : 3
   const diff = homeRating - awayRating + homeAdv
-  return 1 / (1 + Math.exp(-diff / 15))
+  return 1 / (1 + Math.exp(-diff / 9))
 }
 
 // Simulate a single game. Returns the winning team's ID.

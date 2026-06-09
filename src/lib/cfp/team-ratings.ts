@@ -40,7 +40,7 @@ export const TEAM_RATINGS: Record<string, number> = {
   'Michigan':             86,
   'USC':                  83,
   'Illinois':             78,
-  'Wisconsin':            82,
+  'Wisconsin':            73,
   'Minnesota':            76,
   'Iowa':                 72,
   'Nebraska':             78,
@@ -55,7 +55,7 @@ export const TEAM_RATINGS: Record<string, number> = {
   // ── ACC ─────────────────────────────────────────────────────────
   'Clemson':              84,
   'Miami':                93,
-  'Florida State':        86,
+  'Florida State':        70,
   'Louisville':           78,
   'SMU':                  76,
   'Georgia Tech':         77,
@@ -73,7 +73,7 @@ export const TEAM_RATINGS: Record<string, number> = {
 
   // ── Big 12 ──────────────────────────────────────────────────────
   'BYU':                  86,
-  'Texas Tech':           85,
+  'Texas Tech':           90,
   'Oklahoma State':       83,
   'Arizona State':        82,
   'Houston':              79,
