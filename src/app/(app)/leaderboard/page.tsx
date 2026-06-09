@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
 import { getSeasonLeaderboard, getWeeklyLeaderboard } from '@/lib/data/leaderboard'
 import { getCfbAvailableWeeks, getOpenWeek } from '@/lib/data/cfb'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
@@ -13,6 +14,10 @@ export default async function LeaderboardPage({
 }) {
   const { view, week: weekParam } = await searchParams
 
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const currentUserId = user?.id ?? null
+
   // Two views: 'season' (Full Season Mode) and 'pickem' (CFB Pick'em weekly)
   const isPickem = view === 'pickem'
   const isSeasonView = !isPickem
@@ -23,7 +28,6 @@ export default async function LeaderboardPage({
   ])
 
   // Default to the most recently completed week for pick'em view
-  // (open week is current; last completed = openWeek - 1, or last week if all done)
   const completedWeeks = openWeek !== null
     ? availableWeeks.filter(w => w < openWeek)
     : availableWeeks
@@ -70,7 +74,7 @@ export default async function LeaderboardPage({
               : 'text-zinc-500 hover:text-zinc-700'
           }`}
         >
-          CFB Pick'em
+          CFB Pick&apos;em
         </Link>
       </div>
 
@@ -82,7 +86,7 @@ export default async function LeaderboardPage({
             <p>Rankings are based on submitting game picks through Full Season Mode — conference game picks, records, and standings. You must have an active Full Season session to appear here.</p>
             <p><span className="font-semibold text-zinc-600">How you rank:</span> points are earned per correctly predicted game winner, season record call, and conference standings placement.</p>
           </div>
-          <SeasonTable entries={seasonEntries} />
+          <SeasonTable entries={seasonEntries} currentUserId={currentUserId} />
         </>
       )}
 
@@ -90,12 +94,12 @@ export default async function LeaderboardPage({
       {isPickem && (
         <>
           <div className="mb-6 rounded-xl bg-[#84cc16]/5 border border-[#84cc16]/30 px-4 py-3 text-xs leading-relaxed space-y-1.5">
-            <p className="font-bold text-zinc-700 text-sm">CFB Pick'em Leaderboard</p>
-            <p className="text-zinc-500">Rankings are based on weekly game picks — pick the winner of every CFB game each week through the Pick'em mode. One week is open at a time; picks lock at kickoff.</p>
-            <p className="text-zinc-500"><span className="font-semibold text-zinc-600">How to qualify:</span> go to <Link href="/cfb/game-picks" className="font-bold text-[#65a30d] underline underline-offset-2">CFB Pick'em</Link> in the CFB Hub and submit picks for any open week.</p>
+            <p className="font-bold text-zinc-700 text-sm">CFB Pick&apos;em Leaderboard</p>
+            <p className="text-zinc-500">Rankings are based on weekly game picks — pick the winner of every CFB game each week through the Pick&apos;em mode. One week is open at a time; picks lock at kickoff.</p>
+            <p className="text-zinc-500"><span className="font-semibold text-zinc-600">How to qualify:</span> go to <Link href="/cfb/game-picks" className="font-bold text-[#65a30d] underline underline-offset-2">CFB Pick&apos;em</Link> in the CFB Hub and submit picks for any open week.</p>
           </div>
 
-          {/* Week selector — only show completed weeks (graded results exist) */}
+          {/* Week selector */}
           {availableWeeks.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-6">
               {availableWeeks.map((w) => {
@@ -125,7 +129,7 @@ export default async function LeaderboardPage({
           {availableWeeks.length === 0 ? (
             <EmptyState message="No schedule loaded yet. Check back after the schedule sync." />
           ) : (
-            <WeeklyTable entries={weeklyEntries} week={week} />
+            <WeeklyTable entries={weeklyEntries} week={week} currentUserId={currentUserId} />
           )}
         </>
       )}
@@ -138,13 +142,23 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-lg">🥇</span>
   if (rank === 2) return <span className="text-lg">🥈</span>
   if (rank === 3) return <span className="text-lg">🥉</span>
-  return <span className="text-sm font-bold text-zinc-400 w-6 text-center">{rank}</span>
+  return <span className="text-sm font-bold text-zinc-400 w-6 text-center inline-block">{rank}</span>
+}
+
+function YouBadge() {
+  return (
+    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-black bg-[#84cc16] text-black leading-none">
+      YOU
+    </span>
+  )
 }
 
 function SeasonTable({
   entries,
+  currentUserId,
 }: {
   entries: Awaited<ReturnType<typeof getSeasonLeaderboard>>
+  currentUserId: string | null
 }) {
   if (entries.length === 0) {
     return <EmptyState message="No Full Season picks submitted yet. Be the first to make your picks!" />
@@ -164,25 +178,38 @@ function SeasonTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100">
-          {entries.map((entry) => (
-            <tr key={entry.userId} className="bg-white hover:bg-zinc-50/60 transition-colors">
-              <td className="px-5 py-3.5">
-                <RankBadge rank={entry.rank} />
-              </td>
-              <td className="px-4 py-3.5">
-                <span className="font-semibold">{entry.displayName}</span>
-                {entry.username && (
-                  <span className="ml-2 text-xs text-zinc-400">@{entry.username}</span>
-                )}
-              </td>
-              <td className="px-4 py-3.5 text-center text-zinc-600">{entry.gamePoints}</td>
-              <td className="px-4 py-3.5 text-center text-zinc-600">{entry.recordPoints}</td>
-              <td className="px-4 py-3.5 text-center text-zinc-600">{entry.standingsPoints}</td>
-              <td className="px-5 py-3.5 text-center">
-                <span className="font-black text-base">{entry.totalPoints}</span>
-              </td>
-            </tr>
-          ))}
+          {entries.map((entry) => {
+            const isMe = entry.userId === currentUserId
+            return (
+              <tr
+                key={entry.userId}
+                className={`transition-colors ${
+                  isMe
+                    ? 'bg-[#84cc16]/10 hover:bg-[#84cc16]/15'
+                    : 'bg-white hover:bg-zinc-50/60'
+                }`}
+              >
+                <td className="px-5 py-3.5">
+                  <RankBadge rank={entry.rank} />
+                </td>
+                <td className="px-4 py-3.5">
+                  <span className={`font-semibold ${isMe ? 'text-black' : ''}`}>
+                    {entry.displayName}
+                  </span>
+                  {entry.username && (
+                    <span className="ml-2 text-xs text-zinc-400">@{entry.username}</span>
+                  )}
+                  {isMe && <YouBadge />}
+                </td>
+                <td className="px-4 py-3.5 text-center text-zinc-600">{entry.gamePoints}</td>
+                <td className="px-4 py-3.5 text-center text-zinc-600">{entry.recordPoints}</td>
+                <td className="px-4 py-3.5 text-center text-zinc-600">{entry.standingsPoints}</td>
+                <td className="px-5 py-3.5 text-center">
+                  <span className="font-black text-base">{entry.totalPoints}</span>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -192,9 +219,11 @@ function SeasonTable({
 function WeeklyTable({
   entries,
   week,
+  currentUserId,
 }: {
   entries: Awaited<ReturnType<typeof getWeeklyLeaderboard>>
   week: number
+  currentUserId: string | null
 }) {
   if (entries.length === 0) {
     return (
@@ -208,7 +237,7 @@ function WeeklyTable({
     <div className="rounded-2xl border border-zinc-200 overflow-hidden">
       <div className="px-5 py-3 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
         <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
-          Week {week} — CFB Pick'em Rankings
+          Week {week} — CFB Pick&apos;em Rankings
         </p>
         <p className="text-xs text-zinc-400">{entries.length} player{entries.length !== 1 ? 's' : ''}</p>
       </div>
@@ -223,28 +252,41 @@ function WeeklyTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100">
-          {entries.map((entry) => (
-            <tr key={entry.userId} className="bg-white hover:bg-zinc-50/60 transition-colors">
-              <td className="px-5 py-3.5">
-                <RankBadge rank={entry.rank} />
-              </td>
-              <td className="px-4 py-3.5">
-                <span className="font-semibold">{entry.displayName}</span>
-                {entry.username && (
-                  <span className="ml-2 text-xs text-zinc-400">@{entry.username}</span>
-                )}
-              </td>
-              <td className="px-4 py-3.5 text-center font-semibold text-zinc-700">
-                {entry.correct}/{entry.total}
-              </td>
-              <td className="px-4 py-3.5 text-center text-zinc-400 text-xs">
-                {entry.total} games
-              </td>
-              <td className="px-5 py-3.5 text-center">
-                <span className="font-black text-base">{entry.points}</span>
-              </td>
-            </tr>
-          ))}
+          {entries.map((entry) => {
+            const isMe = entry.userId === currentUserId
+            return (
+              <tr
+                key={entry.userId}
+                className={`transition-colors ${
+                  isMe
+                    ? 'bg-[#84cc16]/10 hover:bg-[#84cc16]/15'
+                    : 'bg-white hover:bg-zinc-50/60'
+                }`}
+              >
+                <td className="px-5 py-3.5">
+                  <RankBadge rank={entry.rank} />
+                </td>
+                <td className="px-4 py-3.5">
+                  <span className={`font-semibold ${isMe ? 'text-black' : ''}`}>
+                    {entry.displayName}
+                  </span>
+                  {entry.username && (
+                    <span className="ml-2 text-xs text-zinc-400">@{entry.username}</span>
+                  )}
+                  {isMe && <YouBadge />}
+                </td>
+                <td className="px-4 py-3.5 text-center font-semibold text-zinc-700">
+                  {entry.correct}/{entry.total}
+                </td>
+                <td className="px-4 py-3.5 text-center text-zinc-400 text-xs">
+                  {entry.total} games
+                </td>
+                <td className="px-5 py-3.5 text-center">
+                  <span className="font-black text-base">{entry.points}</span>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
