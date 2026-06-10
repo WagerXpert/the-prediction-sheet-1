@@ -23,6 +23,24 @@ function formatGameDate(dateStr: string | null): string {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
+function formatGameTime(dateStr: string | null): string | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) return null
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  )
+}
+
 export default function GamePicksForm({ userId, week, weeks, openWeek, games, existing, results }: Props) {
   const isLocked = openWeek !== null && week !== openWeek
   const isAllComplete = openWeek === null
@@ -37,6 +55,15 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
   function handlePick(gameId: string, teamId: string) {
     if (isLocked) return
     setPicks((prev) => ({ ...prev, [gameId]: teamId }))
+  }
+
+  function handleClearPick(gameId: string) {
+    if (isLocked) return
+    setPicks((prev) => {
+      const next = { ...prev }
+      delete next[gameId]
+      return next
+    })
   }
 
   function handleSave() {
@@ -59,6 +86,19 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
         return
       }
 
+      // Delete picks that were cleared (existed before but removed now)
+      const clearedGameIds = games
+        .filter((g) => g.status !== 'completed' && existing[g.id] && !picks[g.id])
+        .map((g) => g.id)
+
+      if (clearedGameIds.length > 0) {
+        await supabase
+          .from('predictions_game')
+          .delete()
+          .eq('prediction_set_id', predSet.id)
+          .in('game_id', clearedGameIds)
+      }
+
       const openPicks = games
         .filter((g) => g.status !== 'completed' && picks[g.id])
         .map((g) => ({
@@ -67,6 +107,12 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
           game_id: g.id,
           picked_team_id: picks[g.id],
         }))
+
+      if (openPicks.length === 0 && clearedGameIds.length > 0) {
+        setSaveStatus('saved')
+        setTimeout(() => setSaveStatus('idle'), 3000)
+        return
+      }
 
       if (openPicks.length === 0) {
         setSaveStatus('saved')
@@ -217,6 +263,9 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
                 <div className="flex items-center justify-between px-5 py-2 bg-zinc-50 border-b border-zinc-100 text-xs font-medium">
                   <div className="flex items-center gap-3 text-zinc-400">
                     {game.game_date && <span>{formatGameDate(game.game_date)}</span>}
+                    {formatGameTime(game.game_date) && (
+                      <span className="text-zinc-300">· {formatGameTime(game.game_date)}</span>
+                    )}
                     {game.conference_game && (
                       <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Conference</span>
                     )}
@@ -224,9 +273,18 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
                       <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Final</span>
                     )}
                   </div>
-                  {isGraded && (
-                    <div className="flex items-center gap-2">
-                      {result.isCorrect ? (
+                  <div className="flex items-center gap-2">
+                    {gameIsPickable && picked && (
+                      <button
+                        onClick={() => handleClearPick(game.id)}
+                        className="text-zinc-300 hover:text-red-400 transition-colors"
+                        title="Remove pick"
+                      >
+                        <TrashIcon />
+                      </button>
+                    )}
+                    {isGraded && (
+                      result.isCorrect ? (
                         <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">
                           ✓ +{result.pointsAwarded} pts
                         </span>
@@ -234,9 +292,9 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
                         <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">
                           ✗ 0 pts
                         </span>
-                      )}
-                    </div>
-                  )}
+                      )
+                    )}
+                  </div>
                 </div>
 
                 {/* Matchup */}
@@ -288,7 +346,7 @@ function TeamButton({
   isLocked,
   onClick,
 }: {
-  team: { id: string; name: string; abbreviation: string | null } | null
+  team: { id: string; name: string; abbreviation: string | null; logo_url?: string | null } | null
   isPicked: boolean
   isCorrect: boolean | null
   isLocked: boolean
@@ -314,12 +372,24 @@ function TeamButton({
 
   return (
     <button onClick={onClick} disabled={isLocked} className={cls}>
-      {team.name}
-      {team.abbreviation && (
-        <span className={`ml-1.5 text-xs font-normal ${isPicked ? 'opacity-70' : 'text-zinc-400'}`}>
-          {team.abbreviation}
+      <span className="flex items-center gap-2.5">
+        {team.logo_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={team.logo_url}
+            alt=""
+            className="w-8 h-8 object-contain shrink-0"
+          />
+        )}
+        <span>
+          {team.name}
+          {team.abbreviation && (
+            <span className={`ml-1.5 text-xs font-normal ${isPicked ? 'opacity-70' : 'text-zinc-400'}`}>
+              {team.abbreviation}
+            </span>
+          )}
         </span>
-      )}
+      </span>
     </button>
   )
 }

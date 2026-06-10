@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 import { getSession, getSessionProgress, getSessionDashboard } from '@/lib/data/full-season'
 import { getPlayoffBracket, getPlayoffPicks } from '@/lib/data/playoff'
+import ShareButton from '@/components/ShareButton'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
@@ -23,7 +24,7 @@ export default async function DashboardPage() {
 
   // ── Fetch user's prediction state across all 3 modes ──────────────
 
-  const [fsSession, playoffBracket, trackerRows] = await Promise.all([
+  const [fsSession, playoffBracket, trackerRows, weeklyPicksRes] = await Promise.all([
     getSession(user.id),
     getPlayoffBracket(user.id, CURRENT_SEASON),
     supabase
@@ -31,6 +32,10 @@ export default async function DashboardPage() {
       .select('team_id, winner_team_id, game_id')
       .eq('user_id', user.id)
       .eq('season', CURRENT_SEASON),
+    supabase
+      .from('predictions_game')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id),
   ])
 
   const [fsProgress, fsConferences, playoffPicks] = await Promise.all([
@@ -60,7 +65,10 @@ export default async function DashboardPage() {
     pickCount: trackerByTeam.get(t.id)?.pickCount ?? 0,
   }))
 
-  const hasAnyPredictions = !!fsSession || trackerTeamIds.length > 0 || !!playoffBracket
+  const weeklyPickCount = weeklyPicksRes.count ?? 0
+  const hasAnyPredictions = !!fsSession || trackerTeamIds.length > 0 || !!playoffBracket || weeklyPickCount > 0
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://thepredictionsheet.com'
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
@@ -89,7 +97,12 @@ export default async function DashboardPage() {
           {/* ── Full Season Mode ── */}
           {fsSession && fsProgress ? (
             <section>
-              <SectionLabel>Full Season Mode</SectionLabel>
+              <SectionLabel action={
+                <ShareButton
+                  text={`I've predicted ${fsProgress.games_predicted}/${fsProgress.games_total} CFB games in Full Season Mode this season on The Prediction Sheet 🏈`}
+                  url={`${appUrl}/cfb/full-season`}
+                />
+              }>Full Season Mode</SectionLabel>
               <Link
                 href="/cfb/full-season"
                 className="flex items-center gap-5 p-5 rounded-2xl bg-black text-white hover:bg-zinc-900 transition-all group"
@@ -131,9 +144,42 @@ export default async function DashboardPage() {
             </section>
           )}
 
+          {/* ── Weekly Pick'em ── */}
+          <section>
+            <SectionLabel action={weeklyPickCount > 0 ? (
+              <ShareButton
+                text={`I've made ${weeklyPickCount} game pick${weeklyPickCount !== 1 ? 's' : ''} in CFB Weekly Pick'em on The Prediction Sheet 📋 Come compete with me!`}
+                url={`${appUrl}/cfb/game-picks`}
+              />
+            ) : undefined}>Weekly Pick&apos;em</SectionLabel>
+            {weeklyPickCount > 0 ? (
+              <Link
+                href="/cfb/game-picks"
+                className="flex items-center gap-5 p-5 rounded-2xl border border-zinc-200 hover:border-[#84cc16] hover:shadow-sm bg-white transition-all group"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-lg">{weeklyPickCount} game{weeklyPickCount !== 1 ? 's' : ''} picked</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">Earn points each week for correct picks.</p>
+                </div>
+                <span className="text-zinc-400 text-xl font-black group-hover:text-[#84cc16] group-hover:translate-x-1 transition-all shrink-0">→</span>
+              </Link>
+            ) : (
+              <ModeStartCard
+                title="Make Your Weekly Picks"
+                desc="Pick winners across every FBS game each week. Earn points for correct picks and climb the leaderboard."
+                href="/cfb/game-picks"
+              />
+            )}
+          </section>
+
           {/* ── Team Season Tracker ── */}
           <section>
-            <SectionLabel>Team Season Tracker</SectionLabel>
+            <SectionLabel action={trackerTeams.length > 0 ? (
+              <ShareButton
+                text={`Tracking ${trackerTeams.map(t => t.name).join(', ')} on The Prediction Sheet this CFB season 📊`}
+                url={`${appUrl}/cfb/team-tracker`}
+              />
+            ) : undefined}>Team Season Tracker</SectionLabel>
             {trackerTeams.length === 0 ? (
               <ModeStartCard
                 title="Track a Team"
@@ -174,7 +220,12 @@ export default async function DashboardPage() {
 
           {/* ── CFP Playoff Bracket ── */}
           <section>
-            <SectionLabel>CFP Bracket</SectionLabel>
+            <SectionLabel action={playoffBracket && playoffBracket.seedings.length > 0 ? (
+              <ShareButton
+                text={`Just called ${playoffPicks.length}/11 games in my 12-team CFP bracket on The Prediction Sheet 🏆${playoffPicks.length === 11 ? ' — champion locked in!' : ''}`}
+                url={`${appUrl}/cfb/playoff`}
+              />
+            ) : undefined}>CFP Bracket</SectionLabel>
             {!playoffBracket || playoffBracket.seedings.length === 0 ? (
               <ModeStartCard
                 title="Build Your CFP Bracket"
@@ -229,9 +280,12 @@ export default async function DashboardPage() {
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3">{children}</p>
+    <div className="flex items-center justify-between mb-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{children}</p>
+      {action}
+    </div>
   )
 }
 

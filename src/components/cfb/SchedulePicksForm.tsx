@@ -21,6 +21,24 @@ function formatDate(dateStr: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function formatGameTime(dateStr: string | null): string | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) return null
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  )
+}
+
 export default function SchedulePicksForm({ userId, teamId, team, games, savedWins }: Props) {
   const [picks, setPicks] = useState<Record<string, Result>>({})
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -129,7 +147,7 @@ export default function SchedulePicksForm({ userId, teamId, team, games, savedWi
       </div>
 
       {/* Schedule */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {games.map((game) => {
           const isHome = game.home_team?.id === teamId
           const opponent = isHome ? game.away_team : game.home_team
@@ -139,60 +157,53 @@ export default function SchedulePicksForm({ userId, teamId, team, games, savedWi
           return (
             <div
               key={game.id}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl border border-zinc-200 bg-white"
+              className="rounded-2xl border border-zinc-200 bg-white overflow-hidden"
             >
-              {/* Date + week */}
-              <div className="w-20 shrink-0 text-center">
-                <p className="text-xs font-semibold text-zinc-400 uppercase">Wk {game.week}</p>
-                <p className="text-xs text-zinc-400">{formatDate(game.game_date)}</p>
+              {/* Meta row */}
+              <div className="flex items-center gap-3 px-5 py-2 bg-zinc-50 border-b border-zinc-100 text-xs font-medium text-zinc-400">
+                <span>Wk {game.week}</span>
+                {game.game_date && <span>{formatDate(game.game_date)}</span>}
+                {formatGameTime(game.game_date) && (
+                  <span className="text-zinc-300">· {formatGameTime(game.game_date)}</span>
+                )}
+                {game.conference_game && (
+                  <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Conference</span>
+                )}
+                {isLocked && (
+                  <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Final</span>
+                )}
+                {!isLocked && pick && (
+                  <button
+                    onClick={() => handlePick(game.id, pick)}
+                    className="ml-auto flex items-center gap-1 text-zinc-300 hover:text-red-400 transition-colors"
+                    title="Remove pick"
+                  >
+                    <TrashIcon />
+                  </button>
+                )}
               </div>
 
-              {/* Opponent */}
-              <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                <span className="text-xs font-semibold text-zinc-400 shrink-0">
+              {/* Matchup row — your team vs opponent, like pick'em */}
+              <div className="flex items-center gap-3 px-5 py-4">
+                <PickButton
+                  logo={team.logo_url}
+                  name={team.name}
+                  picked={pick === 'W'}
+                  variant="win"
+                  disabled={isLocked}
+                  onClick={() => handlePick(game.id, 'W')}
+                />
+                <span className="text-zinc-300 font-semibold text-sm shrink-0">
                   {game.neutral_site ? 'vs' : isHome ? 'vs' : '@'}
                 </span>
-                {opponent?.logo_url ? (
-                  <img
-                    src={opponent.logo_url}
-                    alt={opponent.name}
-                    className="w-7 h-7 object-contain shrink-0"
-                  />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-zinc-100 shrink-0" />
-                )}
-                <span className="font-semibold text-sm truncate">
-                  {opponent?.name ?? 'TBD'}
-                </span>
-                {game.conference_game && (
-                  <span className="text-xs text-zinc-400 shrink-0">· Conf</span>
-                )}
-              </div>
-
-              {/* W / L buttons */}
-              <div className="flex gap-1.5 shrink-0">
-                <button
-                  onClick={() => handlePick(game.id, 'W')}
+                <PickButton
+                  logo={opponent?.logo_url ?? null}
+                  name={opponent?.name ?? 'TBD'}
+                  picked={pick === 'L'}
+                  variant="loss"
                   disabled={isLocked}
-                  className={`w-10 h-9 rounded-lg text-sm font-black transition-all ${
-                    pick === 'W'
-                      ? 'bg-green-500 text-white'
-                      : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
-                  } disabled:cursor-default`}
-                >
-                  W
-                </button>
-                <button
                   onClick={() => handlePick(game.id, 'L')}
-                  disabled={isLocked}
-                  className={`w-10 h-9 rounded-lg text-sm font-black transition-all ${
-                    pick === 'L'
-                      ? 'bg-red-500 text-white'
-                      : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
-                  } disabled:cursor-default`}
-                >
-                  L
-                </button>
+                />
               </div>
             </div>
           )
@@ -215,5 +226,45 @@ export default function SchedulePicksForm({ userId, teamId, team, games, savedWi
         </button>
       </div>
     </div>
+  )
+}
+
+function PickButton({
+  logo,
+  name,
+  picked,
+  variant,
+  disabled,
+  onClick,
+}: {
+  logo: string | null
+  name: string
+  picked: boolean
+  variant: 'win' | 'loss'
+  disabled: boolean
+  onClick: () => void
+}) {
+  let cls = 'flex-1 px-3 py-3 rounded-xl text-sm font-bold text-left transition-all border disabled:cursor-default '
+
+  if (picked && variant === 'win') {
+    cls += 'bg-[#84cc16] text-black border-[#84cc16]'
+  } else if (picked && variant === 'loss') {
+    cls += 'bg-zinc-200 text-zinc-700 border-zinc-200'
+  } else if (disabled) {
+    cls += 'bg-zinc-50 text-zinc-400 border-zinc-200'
+  } else {
+    cls += 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50'
+  }
+
+  return (
+    <button onClick={onClick} disabled={disabled} className={cls}>
+      <span className="flex items-center gap-2">
+        {logo && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logo} alt="" className="w-7 h-7 object-contain shrink-0" />
+        )}
+        <span className="leading-tight">{name}</span>
+      </span>
+    </button>
   )
 }

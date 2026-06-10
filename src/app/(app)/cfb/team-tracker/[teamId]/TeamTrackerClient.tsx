@@ -18,32 +18,68 @@ function formatShortDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function formatGameTime(dateStr: string | null): string | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) return null
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
 type Team = NonNullable<TTGame['home_team']>
 
-function TeamChip({
+function TeamPickButton({
   team,
-  isWinner,
-  isLoser,
+  pickedId,
+  actualWinner,
   isCurrentTeam,
+  isCompleted,
+  onClick,
 }: {
   team: Team | null
-  isWinner: boolean
-  isLoser: boolean
+  pickedId: string | null
+  actualWinner: string | null
   isCurrentTeam: boolean
+  isCompleted: boolean
+  onClick: () => void
 }) {
-  if (!team) return <span className="text-xs text-zinc-300 w-24">TBD</span>
-  const abbr = team.abbreviation ?? team.name.slice(0, 5)
+  if (!team) {
+    return <div className="flex-1 px-3 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-300">TBD</div>
+  }
+
+  const isPicked = pickedId === team.id
+  const isActualWinner = actualWinner === team.id
+  const isActualLoser = actualWinner !== null && !isActualWinner
+
+  let cls = 'flex-1 px-3 py-2.5 rounded-xl text-sm font-bold text-left transition-all border '
+
+  if (isCompleted) {
+    if (isActualWinner && isPicked) {
+      cls += 'bg-[#84cc16] text-black border-[#84cc16] cursor-default'
+    } else if (isActualWinner) {
+      cls += 'bg-zinc-100 text-zinc-600 border-zinc-200 cursor-default'
+    } else if (isPicked && isActualLoser) {
+      cls += 'bg-red-400 text-white border-red-400 cursor-default'
+    } else {
+      cls += 'bg-zinc-50 text-zinc-300 border-zinc-100 cursor-default opacity-50'
+    }
+  } else if (isPicked) {
+    cls += 'bg-[#84cc16] text-black border-[#84cc16]'
+  } else {
+    cls += 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50'
+  }
+
   return (
-    <div className={`flex items-center gap-2 w-28 shrink-0 ${isLoser ? 'opacity-30' : ''}`}>
-      {team.logo_url ? (
-        <img src={team.logo_url} alt={abbr} className="w-5 h-5 object-contain shrink-0" />
-      ) : (
-        <div className="w-5 h-5 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
-      )}
-      <span className={`text-sm truncate ${isCurrentTeam ? 'font-black' : 'font-semibold'} ${isWinner ? 'text-[#3f6212]' : 'text-zinc-700'}`}>
-        {abbr}
+    <button onClick={onClick} disabled={isCompleted} className={cls}>
+      <span className="flex items-center gap-2">
+        {team.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={team.logo_url} alt="" className="w-6 h-6 object-contain shrink-0" />
+        ) : (
+          <div className="w-6 h-6 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
+        )}
+        <span className={`leading-tight ${isCurrentTeam ? 'font-black' : ''}`}>{team.name}</span>
       </span>
-    </div>
+    </button>
   )
 }
 
@@ -134,7 +170,7 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season,
         </div>
       )}
 
-      {/* Game list — compact rows */}
+      {/* Game list */}
       {initialGames.length === 0 ? (
         <div className="p-10 rounded-2xl bg-zinc-50 border border-zinc-200 text-center">
           <p className="text-zinc-500 font-medium">No schedule loaded yet.</p>
@@ -152,101 +188,70 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season,
                 {weekGames.map((game, gi) => {
                   const isCompleted = game.actual_winner !== null
                   const pickedId = picks[game.id] ?? null
-                  const displayWinnerId = game.actual_winner ?? pickedId
-                  const awayAbbr = game.away_team?.abbreviation ?? game.away_team?.name.slice(0, 5) ?? '?'
-                  const homeAbbr = game.home_team?.abbreviation ?? game.home_team?.name.slice(0, 5) ?? '?'
                   const isSaving = savingGame === game.id
                   const isLastInWeek = gi === weekGames.length - 1
                   const isLastWeek = wi === weeks.length - 1
-
-                  // For completed games with a user pick: was it correct?
-                  const pickResult = isCompleted && pickedId
-                    ? pickedId === game.actual_winner ? 'correct' : 'incorrect'
-                    : null
+                  const gameTime = formatGameTime(game.game_date)
 
                   return (
                     <div
                       key={game.id}
-                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${
-                        pickResult === 'correct' ? 'bg-[#84cc16]/5' :
-                        pickResult === 'incorrect' ? 'bg-red-50/60' :
-                        'hover:bg-zinc-50/60'
-                      } ${!isLastInWeek || !isLastWeek ? 'border-b border-zinc-100' : ''}`}
+                      className={!isLastInWeek || !isLastWeek ? 'border-b border-zinc-100' : ''}
                     >
-                      {/* Date + status */}
-                      <div className="shrink-0 w-16 text-right space-y-0.5">
-                        <div className="text-xs text-zinc-400">
-                          {game.game_date ? formatShortDate(game.game_date) : `Wk ${week || '?'}`}
-                        </div>
-                        <div className="flex justify-end gap-1">
-                          {game.conference_game && <span className="text-[9px] font-bold text-zinc-300 uppercase">CONF</span>}
-                          {isCompleted && <span className="text-[9px] font-bold text-zinc-400 uppercase">Final</span>}
-                          {pickResult === 'correct' && <span className="text-[9px] font-bold text-[#65a30d]">✓</span>}
-                          {pickResult === 'incorrect' && <span className="text-[9px] font-bold text-red-500">✗</span>}
-                        </div>
-                      </div>
-
-                      {/* Matchup */}
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <TeamChip
-                          team={game.away_team}
-                          isWinner={displayWinnerId === game.away_team?.id}
-                          isLoser={displayWinnerId !== null && displayWinnerId !== game.away_team?.id}
-                          isCurrentTeam={game.away_team?.id === teamId}
-                        />
-                        <span className="text-xs text-zinc-300 shrink-0">
-                          {game.neutral_site ? 'vs' : '@'}
-                        </span>
-                        <TeamChip
-                          team={game.home_team}
-                          isWinner={displayWinnerId === game.home_team?.id}
-                          isLoser={displayWinnerId !== null && displayWinnerId !== game.home_team?.id}
-                          isCurrentTeam={game.home_team?.id === teamId}
-                        />
-                      </div>
-
-                      {/* Pick area */}
-                      <div className="shrink-0 flex items-center justify-end w-32">
-                        {isCompleted ? (
-                          <span className="text-sm font-semibold text-zinc-500 tabular-nums">
-                            {game.away_team_points}–{game.home_team_points}
-                          </span>
-                        ) : isSaving ? (
-                          <span className="text-xs text-zinc-300">Saving…</span>
-                        ) : pickedId ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-bold text-[#65a30d]">
-                              {pickedId === game.away_team?.id ? awayAbbr : homeAbbr}
+                      {/* Meta row */}
+                      <div className="flex items-center gap-2 px-4 pt-2.5 text-xs text-zinc-400">
+                        {game.game_date && <span>{formatShortDate(game.game_date)}</span>}
+                        {gameTime && <span className="text-zinc-300">· {gameTime}</span>}
+                        {game.conference_game && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-zinc-100 text-[10px] font-bold uppercase tracking-wide">Conf</span>
+                        )}
+                        <div className="ml-auto flex items-center gap-2">
+                          {isCompleted ? (
+                            <span className="font-semibold text-zinc-500 tabular-nums">
+                              {game.away_team_points}–{game.home_team_points}
                             </span>
-                            <span className="text-xs text-[#65a30d] font-black">✓</span>
+                          ) : isSaving ? (
+                            <span className="flex items-center gap-1 text-zinc-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#84cc16] animate-pulse inline-block" />
+                              Saving…
+                            </span>
+                          ) : pickedId ? (
                             <button
                               onClick={() => {
                                 const newPicks = { ...picks }
                                 delete newPicks[game.id]
                                 setPicks(newPicks)
                               }}
-                              className="text-xs text-zinc-300 hover:text-zinc-500 ml-1 leading-none"
-                              title="Clear pick"
+                              className="flex items-center gap-1 text-zinc-300 hover:text-red-400 transition-colors"
+                              title="Remove pick"
                             >
-                              ×
+                              <TrashIcon />
                             </button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-1.5">
-                            <button
-                              onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
-                              className="px-3 py-1 rounded-full border border-zinc-200 text-xs font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
-                            >
-                              {awayAbbr}
-                            </button>
-                            <button
-                              onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
-                              className="px-3 py-1 rounded-full border border-zinc-200 text-xs font-semibold text-zinc-500 hover:border-[#84cc16] hover:bg-[#84cc16]/10 hover:text-[#3f6212] transition-all"
-                            >
-                              {homeAbbr}
-                            </button>
-                          </div>
-                        )}
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Pick buttons */}
+                      <div className="flex items-center gap-2 px-4 pb-2.5 pt-2">
+                        <TeamPickButton
+                          team={game.away_team}
+                          pickedId={pickedId}
+                          actualWinner={game.actual_winner}
+                          isCurrentTeam={game.away_team?.id === teamId}
+                          isCompleted={isCompleted}
+                          onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
+                        />
+                        <span className="text-zinc-300 text-xs font-semibold shrink-0">
+                          {game.neutral_site ? 'vs' : '@'}
+                        </span>
+                        <TeamPickButton
+                          team={game.home_team}
+                          pickedId={pickedId}
+                          actualWinner={game.actual_winner}
+                          isCurrentTeam={game.home_team?.id === teamId}
+                          isCompleted={isCompleted}
+                          onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
+                        />
                       </div>
                     </div>
                   )
@@ -274,5 +279,16 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season,
         </div>
       )}
     </div>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
   )
 }

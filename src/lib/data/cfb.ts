@@ -153,8 +153,8 @@ export async function getCfbGamesByWeek(week: number): Promise<CfbGame[]> {
     .from('games')
     .select(
       `id, week, game_date, neutral_site, conference_game, season_type, status,
-       home_team:teams!games_home_team_id_fkey(id, name, abbreviation, mascot, logo_url),
-       away_team:teams!games_away_team_id_fkey(id, name, abbreviation, mascot, logo_url)`
+       home_team:teams!games_home_team_id_fkey(id, name, abbreviation, mascot, logo_url, conference_id),
+       away_team:teams!games_away_team_id_fkey(id, name, abbreviation, mascot, logo_url, conference_id)`
     )
     .eq('season', CURRENT_SEASON)
     .eq('week', week)
@@ -162,17 +162,25 @@ export async function getCfbGamesByWeek(week: number): Promise<CfbGame[]> {
 
   if (!data) return []
 
-  return data.map((g) => ({
-    id: g.id,
-    week: g.week as number,
-    game_date: g.game_date,
-    neutral_site: g.neutral_site,
-    conference_game: g.conference_game,
-    season_type: g.season_type as string,
-    status: g.status,
-    home_team: (g.home_team as unknown as CfbTeam) ?? null,
-    away_team: (g.away_team as unknown as CfbTeam) ?? null,
-  }))
+  type RawTeam = CfbTeam & { conference_id: string | null }
+
+  return data
+    .filter((g) => {
+      const home = g.home_team as unknown as RawTeam | null
+      const away = g.away_team as unknown as RawTeam | null
+      return home?.conference_id != null && away?.conference_id != null
+    })
+    .map((g) => ({
+      id: g.id,
+      week: g.week as number,
+      game_date: g.game_date,
+      neutral_site: g.neutral_site,
+      conference_game: g.conference_game,
+      season_type: g.season_type as string,
+      status: g.status,
+      home_team: (g.home_team as unknown as CfbTeam) ?? null,
+      away_team: (g.away_team as unknown as CfbTeam) ?? null,
+    }))
 }
 
 export async function getCfbAvailableWeeks(): Promise<number[]> {
