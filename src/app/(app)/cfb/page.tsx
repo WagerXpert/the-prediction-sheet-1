@@ -1,12 +1,15 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
+import { LiveScoreboard } from '@/components/cfb/LiveScoreboard'
 
 export const metadata: Metadata = { title: 'CFB Hub' }
 
 export default function CFBHubPage() {
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
+      <LiveScoreboard />
+
       <div className="mb-10">
         <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-2">
           {CURRENT_SEASON} CFB Season

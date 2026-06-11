@@ -37,6 +37,9 @@ export interface PlayoffTeamOption {
   conf_abbr: string
   sim_wins: number
   sim_losses: number
+  conf_wins: number
+  conf_losses: number
+  preseason_rating: number
 }
 
 // ── Bracket read/write ─────────────────────────────────────────────
@@ -225,6 +228,9 @@ async function runFullSeasonSim(simSeed: string, season: number): Promise<SimRes
     conf_abbr: r.conf_abbr,
     sim_wins: r.overall_wins,
     sim_losses: r.overall_losses,
+    conf_wins: r.conf_wins,
+    conf_losses: r.conf_losses,
+    preseason_rating: getTeamRating(r.team_name),
   }))
 
   return { seedings, rankings, simSeed, teamOptions }
@@ -341,9 +347,69 @@ export async function updatePlayoffSeedings(bracketId: string, seedings: CFPSeed
 }
 
 // ── Team options for manual picker ───────────────────────────────
+// Fast direct-DB query — does NOT run the full sim. Sorted by actual wins,
+// then preseason rating as tiebreaker (so best teams appear first even early
+// in the season when most records are 0-0).
 
 export async function getPlayoffTeamOptions(season = CURRENT_SEASON): Promise<PlayoffTeamOption[]> {
-  const simSeed = 'manual-picker'
-  const { teamOptions } = await runFullSeasonSim(simSeed, season)
-  return teamOptions
+  const supabase = await createClient()
+
+  const [{ data: teams }, { data: games }] = await Promise.all([
+    supabase
+      .from('teams')
+      .select('id, name, abbreviation, logo_url, color, conference_id, conferences(name, abbreviation)')
+      .eq('sport_id', 'cfb')
+      .not('conference_id', 'is', null),
+    supabase
+      .from('games')
+      .select('home_team_id, away_team_id, home_team_points, away_team_points, conference_game')
+      .eq('sport_id', 'cfb')
+      .eq('season', season)
+      .eq('season_type', 'regular')
+      .eq('status', 'completed'),
+  ])
+
+  const wins = new Map<string, number>()
+  const losses = new Map<string, number>()
+  const cWins = new Map<string, number>()
+  const cLosses = new Map<string, number>()
+
+  for (const g of games ?? []) {
+    const { home_team_id: h, away_team_id: a, home_team_points: hp, away_team_points: ap, conference_game: cg } = g
+    if (!h || !a || hp == null || ap == null) continue
+    const homeWon = (hp as number) > (ap as number)
+    const wid = homeWon ? h : a
+    const lid = homeWon ? a : h
+    wins.set(wid, (wins.get(wid) ?? 0) + 1)
+    losses.set(lid, (losses.get(lid) ?? 0) + 1)
+    if (cg) {
+      cWins.set(wid, (cWins.get(wid) ?? 0) + 1)
+      cLosses.set(lid, (cLosses.get(lid) ?? 0) + 1)
+    }
+  }
+
+  return (teams ?? [])
+    .map(t => {
+      const conf = t.conferences as any
+      const rating = getTeamRating(t.name)
+      return {
+        id: t.id,
+        name: t.name,
+        abbreviation: t.abbreviation,
+        logo_url: t.logo_url,
+        color: t.color,
+        conf_name: conf?.name ?? '',
+        conf_abbr: conf?.abbreviation ?? '',
+        sim_wins: wins.get(t.id) ?? 0,
+        sim_losses: losses.get(t.id) ?? 0,
+        conf_wins: cWins.get(t.id) ?? 0,
+        conf_losses: cLosses.get(t.id) ?? 0,
+        preseason_rating: rating,
+      }
+    })
+    .sort((a, b) => {
+      if (b.sim_wins !== a.sim_wins) return b.sim_wins - a.sim_wins
+      if (a.sim_losses !== b.sim_losses) return a.sim_losses - b.sim_losses
+      return b.preseason_rating - a.preseason_rating
+    })
 }

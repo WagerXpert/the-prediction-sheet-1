@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Script from 'next/script'
+import { FAQAccordion } from './FAQAccordion'
 
 export const metadata: Metadata = {
   title: 'The Prediction Sheet — CFB Game Picks, Schedule Predictions & CFP Playoff Bracket',
@@ -154,7 +155,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-zinc-500 text-lg max-w-lg mb-8 leading-relaxed">
-            Three prediction modes. 900+ games. Free to play.<br className="hidden sm:block" />
+            Four prediction modes. 900+ games. Free to play.<br className="hidden sm:block" />
             Find out exactly how sharp your CFB picks really are.
           </p>
 
@@ -174,7 +175,7 @@ export default function LandingPage() {
           </div>
 
           <div className="flex flex-wrap gap-2" aria-label="Prediction modes">
-            {['Full Season Game Picks', 'Team Schedule Tracker', 'CFP Playoff Bracket'].map(m => (
+            {['Full Season Game Picks', 'Team Schedule Tracker', 'CFP Playoff Bracket', 'Weekly Pick\'em'].map(m => (
               <span key={m} className="px-3 py-1 rounded-full border border-zinc-200 text-xs font-semibold text-zinc-400">
                 {m}
               </span>
@@ -191,8 +192,8 @@ export default function LandingPage() {
             {[
               { stat: '900+', label: 'CFB Games to Pick' },
               { stat: '10',   label: 'FBS Conferences' },
-              { stat: '134',  label: 'FBS Teams' },
-              { stat: '11',   label: 'CFP Bracket Games' },
+              { stat: '138',  label: 'FBS Teams' },
+              { stat: '12',   label: 'CFP Playoff Teams' },
             ].map(({ stat, label }) => (
               <div key={label}>
                 <p className="text-2xl font-black text-[#84cc16]">{stat}</p>
@@ -202,16 +203,16 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* ── 3 Modes ── */}
+        {/* ── 4 Modes ── */}
         <section className="px-6 py-16 max-w-5xl mx-auto w-full" aria-labelledby="modes-heading">
           <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-2">
-            Three Prediction Modes
+            Four Prediction Modes
           </p>
           <h2 id="modes-heading" className="text-3xl font-black uppercase mb-10">
             Every Way to Predict CFB
           </h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
 
             {/* 01 — Full Season */}
             <article className="rounded-2xl bg-black text-white p-6 flex flex-col" aria-labelledby="mode-fullseason">
@@ -234,9 +235,30 @@ export default function LandingPage() {
               </Link>
             </article>
 
-            {/* 02 — Team Tracker */}
+            {/* 02 — Weekly Pick'em */}
+            <article className="rounded-2xl bg-black text-white p-6 flex flex-col" aria-labelledby="mode-pickem">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-3xl font-black text-[#84cc16]">02</span>
+                <span className="px-2 py-0.5 rounded-full bg-[#84cc16]/10 border border-[#84cc16]/30 text-[10px] font-bold text-[#84cc16] uppercase tracking-wide">
+                  New
+                </span>
+              </div>
+              <h3 id="mode-pickem" className="text-lg font-black uppercase mb-2">Weekly Pick'em</h3>
+              <p className="text-zinc-400 text-sm leading-relaxed flex-1 mb-5">
+                Pick the winner of every CFB game each week. No season commitment required —
+                jump in any week, climb the leaderboard, and see how you stack up.
+              </p>
+              <Link
+                href="/signup"
+                className="w-full text-center px-5 py-2.5 bg-[#84cc16] text-black font-bold text-sm rounded-xl hover:bg-[#a3e635] transition-colors"
+              >
+                Start Picking →
+              </Link>
+            </article>
+
+            {/* 03 — Team Tracker */}
             <article className="rounded-2xl border border-zinc-200 p-6 flex flex-col" aria-labelledby="mode-tracker">
-              <span className="text-3xl font-black text-[#84cc16] mb-4">02</span>
+              <span className="text-3xl font-black text-[#84cc16] mb-4">03</span>
               <h3 id="mode-tracker" className="text-lg font-black uppercase mb-2">Team Season Tracker</h3>
               <p className="text-zinc-500 text-sm leading-relaxed flex-1 mb-5">
                 Lock in on any FBS team. Predict every game on their schedule and see your
@@ -250,9 +272,9 @@ export default function LandingPage() {
               </Link>
             </article>
 
-            {/* 03 — CFP Bracket */}
+            {/* 04 — CFP Bracket */}
             <article className="rounded-2xl border border-zinc-200 p-6 flex flex-col" aria-labelledby="mode-cfp">
-              <span className="text-3xl font-black text-[#84cc16] mb-4">03</span>
+              <span className="text-3xl font-black text-[#84cc16] mb-4">04</span>
               <h3 id="mode-cfp" className="text-lg font-black uppercase mb-2">CFP Playoff Bracket</h3>
               <p className="text-zinc-500 text-sm leading-relaxed flex-1 mb-5">
                 Build the full 12-team College Football Playoff bracket. Run a simulation or
@@ -294,41 +316,10 @@ export default function LandingPage() {
         </div>
 
         {/* ── FAQ ── */}
-        <section className="px-6 py-14 max-w-5xl mx-auto w-full" aria-labelledby="faq-heading">
-          <h2 id="faq-heading" className="text-3xl font-black uppercase mb-8">Common Questions</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-0">
-            {[
-              {
-                q: 'Is it free?',
-                a: 'Yes — completely free. Create an account and start picking immediately.',
-              },
-              {
-                q: 'How does the CFP simulation work?',
-                a: 'Our engine blends preseason ratings with actual results to simulate remaining games and generate a realistic 12-team field.',
-              },
-              {
-                q: 'Can I track multiple teams?',
-                a: 'Yes. Start tracking as many FBS teams as you want — each gets its own schedule and accuracy log.',
-              },
-              {
-                q: 'When do picks lock?',
-                a: "Picks save any time before a game is graded. Once a result is recorded, that pick locks and your accuracy updates.",
-              },
-              {
-                q: 'Do I need to pick every game to rank on the leaderboard?',
-                a: "Full Season leaderboard requires picks through Full Season Mode. CFB Pick'em leaderboard is week-by-week — just pick any open week.",
-              },
-              {
-                q: 'What is the 12-team CFP format?',
-                a: 'P4 conference champions plus the top G5 team earn automatic bids. Seeds 1–4 get first-round byes; seeds 5–12 play in.',
-              },
-            ].map(({ q, a }) => (
-              <div key={q} className="border-b border-zinc-100 py-5">
-                <h3 className="font-bold text-sm text-black mb-1">{q}</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed">{a}</p>
-              </div>
-            ))}
-          </div>
+        <section className="px-6 py-14 max-w-3xl mx-auto w-full" aria-labelledby="faq-heading">
+          <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-2">Got Questions?</p>
+          <h2 id="faq-heading" className="text-3xl font-black uppercase mb-10">Common Questions</h2>
+          <FAQAccordion />
         </section>
 
         {/* ── WagerXpert callout ── */}
@@ -355,34 +346,6 @@ export default function LandingPage() {
             >
               Try WagerXpert →
             </a>
-          </div>
-        </section>
-
-        {/* ── CTA ── */}
-        <section className="px-6 pb-16 max-w-5xl mx-auto w-full" aria-labelledby="cta-heading">
-          <div className="bg-black text-white rounded-2xl px-8 py-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-            <div>
-              <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#84cc16] mb-2">
-                Free — No Credit Card — Start Today
-              </p>
-              <h2 id="cta-heading" className="text-2xl font-black uppercase leading-snug">
-                Think you can predict CFB<br />better than everyone else?
-              </h2>
-            </div>
-            <div className="flex flex-col gap-3 shrink-0">
-              <Link
-                href="/signup"
-                className="px-7 py-3.5 bg-[#84cc16] text-black font-black text-sm tracking-wide uppercase rounded-xl hover:bg-[#a3e635] transition-colors whitespace-nowrap text-center"
-              >
-                Create Your Free Sheet
-              </Link>
-              <Link
-                href="/login"
-                className="px-7 py-3.5 border border-zinc-700 text-white font-bold text-sm tracking-wide uppercase rounded-xl hover:border-zinc-400 transition-colors whitespace-nowrap text-center"
-              >
-                Already Have an Account
-              </Link>
-            </div>
           </div>
         </section>
 
