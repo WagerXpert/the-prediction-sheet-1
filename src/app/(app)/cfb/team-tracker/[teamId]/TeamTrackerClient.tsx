@@ -9,6 +9,7 @@ interface Props {
   userId: string
   teamId: string
   games: TTGame[]
+  teamRecords: Record<string, { wins: number; losses: number }>
   season: number
   backHref: string
 }
@@ -33,6 +34,7 @@ function TeamPickButton({
   actualWinner,
   isCurrentTeam,
   isCompleted,
+  record,
   onClick,
 }: {
   team: Team | null
@@ -40,6 +42,7 @@ function TeamPickButton({
   actualWinner: string | null
   isCurrentTeam: boolean
   isCompleted: boolean
+  record?: { wins: number; losses: number }
   onClick: () => void
 }) {
   if (!team) {
@@ -77,13 +80,18 @@ function TeamPickButton({
         ) : (
           <div className="w-6 h-6 rounded-full shrink-0" style={{ backgroundColor: team.color ? `#${team.color}` : '#e4e4e7' }} />
         )}
-        <span className={`leading-tight ${isCurrentTeam ? 'font-black' : ''}`}>{team.name}</span>
+        <span className="flex flex-col min-w-0">
+          <span className={`leading-tight truncate ${isCurrentTeam ? 'font-black' : ''}`}>{team.name}</span>
+          {record && record.wins + record.losses > 0 && (
+            <span className="text-[11px] font-semibold opacity-50 leading-tight">{record.wins}–{record.losses}</span>
+          )}
+        </span>
       </span>
     </button>
   )
 }
 
-export default function TeamTrackerClient({ teamId, games: initialGames, season, backHref }: Props) {
+export default function TeamTrackerClient({ teamId, games: initialGames, teamRecords, season, backHref }: Props) {
   const router = useRouter()
 
   const [picks, setPicks] = useState<Record<string, string>>(() => {
@@ -239,6 +247,7 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season,
                           actualWinner={game.actual_winner}
                           isCurrentTeam={game.away_team?.id === teamId}
                           isCompleted={isCompleted}
+                          record={game.away_team ? teamRecords[game.away_team.id] : undefined}
                           onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
                         />
                         <span className="text-zinc-300 text-xs font-semibold shrink-0">
@@ -250,6 +259,7 @@ export default function TeamTrackerClient({ teamId, games: initialGames, season,
                           actualWinner={game.actual_winner}
                           isCurrentTeam={game.home_team?.id === teamId}
                           isCompleted={isCompleted}
+                          record={game.home_team ? teamRecords[game.home_team.id] : undefined}
                           onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
                         />
                       </div>

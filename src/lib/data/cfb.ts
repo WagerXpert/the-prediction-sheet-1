@@ -215,3 +215,60 @@ export async function getOpenWeek(): Promise<number | null> {
   if (!data?.length) return null
   return data[0].week as number
 }
+
+// Returns actual W-L record for every team from completed games this season.
+export async function getActualTeamRecords(
+  season = CURRENT_SEASON
+): Promise<Record<string, { wins: number; losses: number }>> {
+  const supabase = await createClient()
+
+  const { data: games } = await supabase
+    .from('games')
+    .select('home_team_id, away_team_id, home_team_points, away_team_points')
+    .eq('sport_id', 'cfb')
+    .eq('season', season)
+    .eq('status', 'completed')
+    .not('home_team_points', 'is', null)
+    .not('away_team_points', 'is', null)
+
+  const records: Record<string, { wins: number; losses: number }> = {}
+  for (const g of games ?? []) {
+    if (!g.home_team_id || !g.away_team_id) continue
+    const homeWon = (g.home_team_points ?? 0) > (g.away_team_points ?? 0)
+    records[g.home_team_id] ??= { wins: 0, losses: 0 }
+    records[g.away_team_id] ??= { wins: 0, losses: 0 }
+    if (homeWon) { records[g.home_team_id].wins++; records[g.away_team_id].losses++ }
+    else { records[g.home_team_id].losses++; records[g.away_team_id].wins++ }
+  }
+  return records
+}
+
+// Returns a Map of DB team_id → AP rank for the most recent week.
+// Teams not in the top 25 are absent from the map.
+export async function getLatestRankings(season = CURRENT_SEASON): Promise<Map<string, number>> {
+  const supabase = await createClient()
+
+  const { data: latestRow } = await (supabase as any)
+    .from('rankings')
+    .select('week')
+    .eq('sport_id', 'cfb')
+    .eq('season', season)
+    .eq('poll', 'AP Top 25')
+    .order('week', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!latestRow) return new Map()
+
+  const { data: rows } = await (supabase as any)
+    .from('rankings')
+    .select('team_id, rank')
+    .eq('sport_id', 'cfb')
+    .eq('season', season)
+    .eq('week', latestRow.week)
+    .eq('poll', 'AP Top 25')
+    .not('team_id', 'is', null)
+
+  if (!rows) return new Map()
+  return new Map((rows as { team_id: string; rank: number }[]).map(r => [r.team_id, r.rank]))
+}

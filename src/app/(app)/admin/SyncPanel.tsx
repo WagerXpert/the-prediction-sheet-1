@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { runSyncTeams, runSyncSchedule, runSyncResults } from './actions'
+import { runSyncTeams, runSyncSchedule, runSyncResults, runSyncRankings } from './actions'
 import type { SyncResult } from '@/lib/cfbd/sync'
 
 type Status = { ok: boolean; message: string } | null
@@ -36,6 +36,14 @@ export default function SyncPanel() {
     })
   }
 
+  function handleRankings() {
+    startTransition(async () => {
+      setStatuses(prev => ({ ...prev, rankings: null }))
+      const result = await runSyncRankings()
+      setStatus('rankings', result)
+    })
+  }
+
   function handleResults() {
     const week = weekInput ? parseInt(weekInput, 10) : undefined
     startTransition(async () => {
@@ -65,6 +73,16 @@ export default function SyncPanel() {
         isPending={isPending}
         onRun={handleSchedule}
         badge="Step 2"
+      />
+
+      <SyncRow
+        title="Sync AP Top 25 Rankings"
+        desc="Pulls the latest AP Poll from CFBD. Run once now, then auto-runs every Monday during the season."
+        statusKey="rankings"
+        statuses={statuses}
+        isPending={isPending}
+        onRun={handleRankings}
+        badge="On-demand"
       />
 
       <div className="p-5 rounded-2xl border border-zinc-200 bg-white">

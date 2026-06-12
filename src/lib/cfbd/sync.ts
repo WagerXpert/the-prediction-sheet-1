@@ -2,6 +2,26 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { cfbd } from './client'
 import { CURRENT_SEASON, GAME_STATUS } from '@/lib/utils/constants'
 
+// Week 0  = games before week1Start  (early-kickoff Saturday, e.g. 8/29)
+// Week 1  = week1Start through the day before week2Start (Tue 9/1 – Sun 9/6)
+// Week 2+ = Monday-boundary 7-day windows starting at week2Start
+const CFB_WEEK_CONFIG: Record<number, { week1Start: string; week2Start: string }> = {
+  2026: { week1Start: '2026-09-01', week2Start: '2026-09-07' },
+}
+
+function cfbWeekFromDate(dateStr: string | null, apiWeek: number, season: number): number {
+  const cfg = CFB_WEEK_CONFIG[season]
+  if (!cfg || !dateStr) return apiWeek
+  const gameDate = dateStr.slice(0, 10) // YYYY-MM-DD
+  if (gameDate < cfg.week1Start) return 0
+  if (gameDate < cfg.week2Start) return 1
+  const msPerDay = 1000 * 60 * 60 * 24
+  const days = Math.floor(
+    (new Date(gameDate).getTime() - new Date(cfg.week2Start).getTime()) / msPerDay
+  )
+  return Math.floor(days / 7) + 2
+}
+
 export type SyncResult =
   | { ok: true; records: number; elapsed_ms: number; detail?: string }
   | { ok: false; error: string }
@@ -245,7 +265,9 @@ export async function syncSchedule(season = CURRENT_SEASON): Promise<SyncResult>
         external_id: g.id,
         season: g.season,
         season_type: g.seasonType ?? 'regular',
-        week: g.week,
+        week: g.seasonType === 'regular'
+          ? cfbWeekFromDate(g.startDate, g.week, g.season)
+          : g.week,
         game_date: g.startDate,
         home_team_id: teamByName.get(g.homeTeam) ?? null,
         away_team_id: teamByName.get(g.awayTeam) ?? null,
@@ -524,5 +546,71 @@ async function gradePredictionStandings(db: ReturnType<typeof createServiceClien
       actual_rank: actualRank,
       points_awarded: points,
     }).eq('id', pred.id)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sync: AP Top 25 rankings → rankings table
+// ---------------------------------------------------------------------------
+
+export async function syncRankings(season = CURRENT_SEASON, week?: number): Promise<SyncResult> {
+  const t0 = Date.now()
+  const db = createServiceClient()
+
+  try {
+    // Try the requested season first; fall back to previous season when preseason polls aren't out yet
+    let weekData = await cfbd.rankings(season, week)
+    const usingFallback = !weekData.length
+    if (usingFallback) {
+      weekData = await cfbd.rankings(season - 1)
+    }
+    if (!weekData.length) {
+      return { ok: true, records: 0, elapsed_ms: Date.now() - t0, detail: 'No ranking data available from CFBD' }
+    }
+
+    // Most recent week in the response
+    const latest = weekData[weekData.length - 1]
+    const apPoll = latest.polls.find(p => p.poll === 'AP Top 25')
+    if (!apPoll) {
+      return { ok: true, records: 0, elapsed_ms: Date.now() - t0, detail: 'AP Top 25 not found in response' }
+    }
+
+    // When falling back to prior season, store as current season week 0 (preseason placeholder)
+    const storeSeason = season
+    const storeWeek = usingFallback ? 0 : latest.week
+
+    // Build team name → DB id map
+    const { data: teams } = await db.from('teams').select('id, name').eq('sport_id', 'cfb')
+    const teamByName = new Map(teams?.map(t => [t.name, t.id]) ?? [])
+
+    const rows = apPoll.ranks.map(r => ({
+      sport_id: 'cfb',
+      season: storeSeason,
+      week: storeWeek,
+      poll: 'AP Top 25',
+      rank: r.rank,
+      team_id: teamByName.get(r.school) ?? null,
+      team_name: r.school,
+      first_place_votes: r.firstPlaceVotes ?? null,
+      points: r.points ?? null,
+    }))
+
+    await (db as any).from('rankings')
+      .delete()
+      .eq('sport_id', 'cfb')
+      .eq('season', storeSeason)
+      .eq('week', storeWeek)
+      .eq('poll', 'AP Top 25')
+
+    const { error } = await (db as any).from('rankings').insert(rows)
+    if (error) throw error
+
+    const detail = usingFallback
+      ? `Used ${season - 1} final rankings as preseason placeholder (${season} poll not yet released)`
+      : undefined
+
+    return { ok: true, records: rows.length, elapsed_ms: Date.now() - t0, detail }
+  } catch (err: any) {
+    return { ok: false, error: String(err?.message ?? err) }
   }
 }

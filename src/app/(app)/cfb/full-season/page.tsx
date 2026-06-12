@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getSession, getSessionDashboard, getSessionProgress } from '@/lib/data/full-season'
+import { getLatestRankings } from '@/lib/data/cfb'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 import FullSeasonActions from './FullSeasonActions'
 import type { Metadata } from 'next'
@@ -16,9 +17,10 @@ export default async function FullSeasonPage() {
   const session = await getSession(user.id)
   if (!session) redirect('/cfb/full-season/setup')
 
-  const [conferences, progress] = await Promise.all([
+  const [conferences, progress, rankings] = await Promise.all([
     getSessionDashboard(session.id),
     getSessionProgress(session.id),
+    getLatestRankings(CURRENT_SEASON),
   ])
   if (conferences.length === 0) redirect('/cfb/full-season/setup')
 
@@ -55,13 +57,19 @@ export default async function FullSeasonPage() {
             <div key={conf.id}>
               {/* Conference header */}
               <div className="flex items-center gap-3 mb-4">
-                {conf.logo_url ? (
-                  <img src={conf.logo_url} alt={conf.abbreviation} className="w-8 h-8 object-contain" />
-                ) : (
-                  <div className="w-8 h-8 flex items-center justify-center">
-                    <span className="text-xs font-black text-zinc-500">{conf.abbreviation}</span>
-                  </div>
-                )}
+                <Link
+                  href={`/cfb/full-season/conference/${conf.id}`}
+                  title={`${conf.name} standings`}
+                  className="shrink-0 hover:opacity-70 transition-opacity"
+                >
+                  {conf.logo_url ? (
+                    <img src={conf.logo_url} alt={conf.abbreviation} className="w-8 h-8 object-contain" />
+                  ) : (
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <span className="text-xs font-black text-zinc-500">{conf.abbreviation}</span>
+                    </div>
+                  )}
+                </Link>
                 <h2 className="text-xl font-black">{conf.name}</h2>
                 <span className="text-sm text-zinc-400 font-medium">
                   {done}/{conf.teams.length} complete
@@ -75,6 +83,7 @@ export default async function FullSeasonPage() {
                   const isComplete = team.games_total > 0 && team.games_predicted === team.games_total
                   const isStarted = team.games_predicted > 0
                   const hasPicks = team.predicted_wins + team.predicted_losses > 0
+                  const rank = rankings.get(team.id)
 
                   return (
                     <Link
@@ -98,7 +107,12 @@ export default async function FullSeasonPage() {
                       )}
 
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold truncate leading-tight">{team.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-bold truncate leading-tight">{team.name}</p>
+                          {rank && (
+                            <span className="text-[10px] font-black text-zinc-400 shrink-0">#{rank}</span>
+                          )}
+                        </div>
                         {hasPicks ? (
                           <p className={`text-xs font-semibold mt-0.5 ${isComplete ? 'text-[#65a30d]' : 'text-zinc-500'}`}>
                             {team.predicted_wins}–{team.predicted_losses}

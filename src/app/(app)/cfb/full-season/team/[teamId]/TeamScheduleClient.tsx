@@ -12,6 +12,8 @@ interface Props {
   conferenceTeams: ConferenceTeamRow[]
   conferenceGames: ConferenceGameRow[]
   initialPicks: Record<string, string>
+  rankings: Record<string, number>
+  teamRecords: Record<string, { wins: number; losses: number }>
   season: number
   backHref: string
 }
@@ -77,6 +79,8 @@ function TeamPickButton({
   actualWinnerId,
   isCurrentTeam,
   isCompleted,
+  rank,
+  record,
   onClick,
 }: {
   team: FSGame['home_team'] | null
@@ -84,6 +88,8 @@ function TeamPickButton({
   actualWinnerId: string | null
   isCurrentTeam: boolean
   isCompleted: boolean
+  rank?: number
+  record?: { wins: number; losses: number }
   onClick: () => void
 }) {
   if (!team) {
@@ -119,7 +125,17 @@ function TeamPickButton({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={team.logo_url} alt="" className="w-6 h-6 object-contain shrink-0" />
         )}
-        <span className={`leading-tight ${isCurrentTeam ? 'font-black' : ''}`}>{team.name}</span>
+        <span className="flex flex-col min-w-0">
+          <span className={`leading-tight truncate ${isCurrentTeam ? 'font-black' : ''}`}>{team.name}</span>
+          {record && record.wins + record.losses > 0 && (
+            <span className="text-[11px] font-semibold opacity-50 leading-tight">
+              {record.wins}–{record.losses}
+            </span>
+          )}
+        </span>
+        {rank && (
+          <span className="ml-auto text-[10px] font-black opacity-60 shrink-0">#{rank}</span>
+        )}
       </span>
     </button>
   )
@@ -132,6 +148,8 @@ export default function TeamScheduleClient({
   conferenceTeams,
   conferenceGames,
   initialPicks,
+  rankings,
+  teamRecords,
   backHref,
 }: Props) {
   const router = useRouter()
@@ -146,6 +164,39 @@ export default function TeamScheduleClient({
   const [, startTransition] = useTransition()
   const [savingGame, setSavingGame] = useState<string | null>(null)
   const [lastSaved, setLastSaved] = useState<string | null>(null)
+
+  // Recompute team records live whenever picks change.
+  // Conference games (which include non-conf games for conf teams) are the source of truth.
+  // Non-conf opponents outside the session fall back to the server-provided actual records.
+  const liveRecords = useMemo(() => {
+    const records: Record<string, { wins: number; losses: number }> = {}
+    // Seed with server actual records (covers teams outside this conference)
+    for (const [id, r] of Object.entries(teamRecords)) {
+      records[id] = { ...r }
+    }
+    // Reset records for conference teams so we recompute from picks
+    for (const t of conferenceTeams) {
+      records[t.id] = { wins: 0, losses: 0 }
+    }
+    for (const g of conferenceGames) {
+      const homeId = g.home_team_id
+      const awayId = g.away_team_id
+      if (!homeId || !awayId) continue
+      records[homeId] ??= { wins: 0, losses: 0 }
+      records[awayId] ??= { wins: 0, losses: 0 }
+      let winnerId: string | null = null
+      if (g.status === 'completed' && g.home_team_points !== null && g.away_team_points !== null) {
+        winnerId = g.home_team_points > g.away_team_points ? homeId : awayId
+      } else {
+        winnerId = picks[g.id] ?? null
+      }
+      if (!winnerId) continue
+      const loserId = winnerId === homeId ? awayId : homeId
+      records[winnerId].wins++
+      records[loserId].losses++
+    }
+    return records
+  }, [conferenceGames, conferenceTeams, picks, teamRecords])
 
   const standings = useMemo(
     () => computeStandings(conferenceTeams, conferenceGames, picks),
@@ -330,6 +381,8 @@ export default function TeamScheduleClient({
                           actualWinnerId={actual}
                           isCurrentTeam={game.away_team?.id === teamId}
                           isCompleted={isCompleted}
+                          rank={game.away_team ? rankings[game.away_team.id] : undefined}
+                          record={game.away_team ? liveRecords[game.away_team.id] : undefined}
                           onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
                         />
                         <span className="text-zinc-300 text-xs font-semibold shrink-0">
@@ -341,6 +394,8 @@ export default function TeamScheduleClient({
                           actualWinnerId={actual}
                           isCurrentTeam={game.home_team?.id === teamId}
                           isCompleted={isCompleted}
+                          rank={game.home_team ? rankings[game.home_team.id] : undefined}
+                          record={game.home_team ? liveRecords[game.home_team.id] : undefined}
                           onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
                         />
                       </div>

@@ -6,6 +6,8 @@ import {
   getTeamScheduleForSession,
   getConferenceStandingsData,
 } from '@/lib/data/full-season'
+import { getLatestRankings, getActualTeamRecords } from '@/lib/data/cfb'
+import { cfbd } from '@/lib/cfbd/client'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 import TeamScheduleClient from './TeamScheduleClient'
 import type { Metadata } from 'next'
@@ -29,18 +31,24 @@ export default async function FullSeasonTeamPage({
   // Fetch team info
   const { data: team } = await supabase
     .from('teams')
-    .select('id, name, abbreviation, mascot, logo_url, color, conference_id')
+    .select('id, name, abbreviation, mascot, logo_url, color, conference_id, external_id')
     .eq('id', teamId)
     .single()
 
   if (!team) notFound()
 
-  const [games, standingsData] = await Promise.all([
+  const [games, standingsData, rankings, prevRecords, teamRecords] = await Promise.all([
     getTeamScheduleForSession(session.id, teamId),
     team.conference_id
       ? getConferenceStandingsData(session.id, team.conference_id)
       : Promise.resolve({ teams: [], games: [], picks: {} }),
+    getLatestRankings(CURRENT_SEASON),
+    cfbd.records(CURRENT_SEASON - 1, team.name).catch(() => [] as Awaited<ReturnType<typeof cfbd.records>>),
+    getActualTeamRecords(CURRENT_SEASON),
   ])
+
+  const currentRank = rankings.get(teamId) ?? null
+  const prevRecord = prevRecords[0]?.total ?? null
 
   const predicted = games.filter(g => g.winner_team_id !== null).length
 
@@ -68,8 +76,20 @@ export default async function FullSeasonTeamPage({
           </div>
         )}
         <div>
-          <h1 className="text-3xl font-black">{team.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black">{team.name}</h1>
+            {currentRank && (
+              <span className="text-sm font-black text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-lg">
+                #{currentRank} AP
+              </span>
+            )}
+          </div>
           {team.mascot && <p className="text-zinc-400 text-sm mt-0.5">{team.mascot}</p>}
+          {prevRecord && (
+            <p className="text-xs text-zinc-400 mt-0.5">
+              {CURRENT_SEASON - 1} record: {prevRecord.wins}–{prevRecord.losses}
+            </p>
+          )}
           <p className="text-sm font-medium text-zinc-500 mt-1">
             {predicted} / {games.length} games predicted
             {games.length > 0 && predicted === games.length && (
@@ -86,6 +106,8 @@ export default async function FullSeasonTeamPage({
         conferenceTeams={standingsData.teams}
         conferenceGames={standingsData.games}
         initialPicks={standingsData.picks}
+        rankings={Object.fromEntries(rankings)}
+        teamRecords={teamRecords}
         season={CURRENT_SEASON}
         backHref="/cfb/full-season"
       />

@@ -390,3 +390,20 @@ export async function getConferenceStandingsData(
 
   return { teams, games, picks }
 }
+
+// Flat map of teamId → predicted W-L for all teams in a session.
+// Combines actual completed results + user picks for unplayed games.
+export async function getSessionTeamRecords(
+  sessionId: string,
+  season = CURRENT_SEASON
+): Promise<Record<string, { wins: number; losses: number }>> {
+  const conferences = await getSessionDashboard(sessionId, season)
+  const records: Record<string, { wins: number; losses: number }> = {}
+  for (const conf of conferences) {
+    for (const team of conf.teams) {
+      records[team.id] = { wins: team.predicted_wins, losses: team.predicted_losses }
+    }
+  }
+  return records
+}
+

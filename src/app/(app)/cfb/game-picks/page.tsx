@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getCfbGamesByWeek, getCfbAvailableWeeks, getOpenWeek } from '@/lib/data/cfb'
+import { getCfbGamesByWeek, getCfbAvailableWeeks, getOpenWeek, getActualTeamRecords } from '@/lib/data/cfb'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 import { getUserGamePickResults } from '@/lib/data/scores'
 import GamePicksForm from '@/components/cfb/GamePicksForm'
@@ -19,9 +19,10 @@ export default async function GamePicksPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?redirectTo=/cfb/game-picks')
 
-  const [availableWeeks, openWeek] = await Promise.all([
+  const [availableWeeks, openWeek, teamRecords] = await Promise.all([
     getCfbAvailableWeeks(),
     getOpenWeek(),
+    getActualTeamRecords(CURRENT_SEASON),
   ])
 
   const { week: weekParam } = await searchParams
@@ -115,6 +116,7 @@ export default async function GamePicksPage({
           games={games}
           existing={existing}
           results={results}
+          teamRecords={teamRecords}
         />
       )}
     </div>

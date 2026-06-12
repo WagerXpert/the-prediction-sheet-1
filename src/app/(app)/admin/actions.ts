@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { syncTeams, syncSchedule, syncResults } from '@/lib/cfbd/sync'
+import { syncTeams, syncSchedule, syncResults, syncRankings } from '@/lib/cfbd/sync'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 
 async function requireAdmin() {
@@ -32,4 +32,9 @@ export async function runSyncSchedule() {
 export async function runSyncResults(week?: number) {
   await requireAdmin()
   return syncResults(CURRENT_SEASON, week)
+}
+
+export async function runSyncRankings() {
+  await requireAdmin()
+  return syncRankings(CURRENT_SEASON)
 }

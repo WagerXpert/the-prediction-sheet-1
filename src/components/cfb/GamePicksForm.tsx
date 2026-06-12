@@ -15,6 +15,7 @@ interface Props {
   games: CfbGame[]
   existing: Record<string, string>
   results: Record<string, GamePickResult>
+  teamRecords: Record<string, { wins: number; losses: number }>
 }
 
 function formatGameDate(dateStr: string | null): string {
@@ -41,7 +42,7 @@ function TrashIcon() {
   )
 }
 
-export default function GamePicksForm({ userId, week, weeks, openWeek, games, existing, results }: Props) {
+export default function GamePicksForm({ userId, week, weeks, openWeek, games, existing, results, teamRecords }: Props) {
   const isLocked = openWeek !== null && week !== openWeek
   const isAllComplete = openWeek === null
 
@@ -304,6 +305,7 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
                     isPicked={picked === game.away_team?.id}
                     isCorrect={isGraded && picked === game.away_team?.id ? result.isCorrect : null}
                     isLocked={!gameIsPickable}
+                    record={game.away_team ? teamRecords[game.away_team.id] : undefined}
                     onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
                   />
                   <span className="text-zinc-300 font-semibold text-sm shrink-0">
@@ -314,6 +316,7 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
                     isPicked={picked === game.home_team?.id}
                     isCorrect={isGraded && picked === game.home_team?.id ? result.isCorrect : null}
                     isLocked={!gameIsPickable}
+                    record={game.home_team ? teamRecords[game.home_team.id] : undefined}
                     onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
                   />
                 </div>
@@ -344,12 +347,14 @@ function TeamButton({
   isPicked,
   isCorrect,
   isLocked,
+  record,
   onClick,
 }: {
   team: { id: string; name: string; abbreviation: string | null; logo_url?: string | null } | null
   isPicked: boolean
   isCorrect: boolean | null
   isLocked: boolean
+  record?: { wins: number; losses: number }
   onClick: () => void
 }) {
   if (!team) {
@@ -381,12 +386,17 @@ function TeamButton({
             className="w-8 h-8 object-contain shrink-0"
           />
         )}
-        <span>
-          {team.name}
-          {team.abbreviation && (
-            <span className={`ml-1.5 text-xs font-normal ${isPicked ? 'opacity-70' : 'text-zinc-400'}`}>
-              {team.abbreviation}
-            </span>
+        <span className="flex flex-col min-w-0">
+          <span className="leading-tight truncate">
+            {team.name}
+            {team.abbreviation && (
+              <span className={`ml-1.5 text-xs font-normal ${isPicked ? 'opacity-70' : 'text-zinc-400'}`}>
+                {team.abbreviation}
+              </span>
+            )}
+          </span>
+          {record && record.wins + record.losses > 0 && (
+            <span className="text-[11px] font-semibold opacity-50 leading-tight">{record.wins}–{record.losses}</span>
           )}
         </span>
       </span>

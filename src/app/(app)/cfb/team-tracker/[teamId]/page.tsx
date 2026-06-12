@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getTeamTrackerSchedule } from '@/lib/data/team-tracker'
+import { getActualTeamRecords } from '@/lib/data/cfb'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 import TeamTrackerClient from './TeamTrackerClient'
 import type { Metadata } from 'next'
@@ -27,7 +28,10 @@ export default async function TeamTrackerTeamPage({
 
   if (!team) notFound()
 
-  const games = await getTeamTrackerSchedule(user.id, teamId, CURRENT_SEASON)
+  const [games, teamRecords] = await Promise.all([
+    getTeamTrackerSchedule(user.id, teamId, CURRENT_SEASON),
+    getActualTeamRecords(CURRENT_SEASON),
+  ])
 
   const completedGames = games.filter(g => g.actual_winner !== null)
   const correctPicks = completedGames.filter(
@@ -93,6 +97,7 @@ export default async function TeamTrackerTeamPage({
         userId={user.id}
         teamId={teamId}
         games={games}
+        teamRecords={teamRecords}
         season={CURRENT_SEASON}
         backHref="/cfb/team-tracker"
       />
