@@ -19,11 +19,12 @@ function formatShortDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function formatGameTime(dateStr: string | null): string | null {
-  if (!dateStr) return null
+function formatGameTime(dateStr: string | null): string {
+  if (!dateStr) return 'TBA'
   const d = new Date(dateStr)
-  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) return null
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const etTime = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York' })
+  if (etTime === '00:00') return 'TBA'
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })
 }
 
 type Team = NonNullable<TTGame['home_team']>
@@ -209,7 +210,7 @@ export default function TeamTrackerClient({ teamId, games: initialGames, teamRec
                       {/* Meta row */}
                       <div className="flex items-center gap-2 px-4 pt-2.5 text-xs text-zinc-400">
                         {game.game_date && <span>{formatShortDate(game.game_date)}</span>}
-                        {gameTime && <span className="text-zinc-300">· {gameTime}</span>}
+                        <span className="text-zinc-300">· {gameTime}</span>
                         {game.conference_game && (
                           <span className="px-1.5 py-0.5 rounded-full bg-zinc-100 text-[10px] font-bold uppercase tracking-wide">Conf</span>
                         )}

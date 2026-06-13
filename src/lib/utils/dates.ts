@@ -17,6 +17,8 @@ export function formatDate(date: string | Date): string {
 export function formatGameTime(date: string | Date): string {
   const d = new Date(date)
   const day = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const etTime = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York' })
+  if (etTime === '00:00') return `${day} · TBA`
   const time = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',

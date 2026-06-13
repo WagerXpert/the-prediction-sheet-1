@@ -21,11 +21,12 @@ function formatDate(dateStr: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function formatGameTime(dateStr: string | null): string | null {
-  if (!dateStr) return null
+function formatGameTime(dateStr: string | null): string {
+  if (!dateStr) return 'TBA'
   const d = new Date(dateStr)
-  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) return null
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const etTime = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York' })
+  if (etTime === '00:00') return 'TBA'
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })
 }
 
 function TrashIcon() {
@@ -163,9 +164,7 @@ export default function SchedulePicksForm({ userId, teamId, team, games, savedWi
               <div className="flex items-center gap-3 px-5 py-2 bg-zinc-50 border-b border-zinc-100 text-xs font-medium text-zinc-400">
                 <span>Wk {game.week}</span>
                 {game.game_date && <span>{formatDate(game.game_date)}</span>}
-                {formatGameTime(game.game_date) && (
-                  <span className="text-zinc-300">· {formatGameTime(game.game_date)}</span>
-                )}
+                <span className="text-zinc-300">· {formatGameTime(game.game_date ?? null)}</span>
                 {game.conference_game && (
                   <span className="px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">Conference</span>
                 )}
