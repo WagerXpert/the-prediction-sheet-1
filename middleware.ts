@@ -72,6 +72,6 @@ export const config = {
      * - public assets (png, jpg, svg, etc.)
      * - API routes that don't need session (auth callback)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|txt)$).*)',
   ],
 }
