@@ -14,6 +14,7 @@ interface Props {
   initialPicks: Record<string, string>
   rankings: Record<string, number>
   teamRecords: Record<string, { wins: number; losses: number }>
+  sessionRecords: Record<string, { wins: number; losses: number }>
   season: number
   backHref: string
 }
@@ -151,6 +152,7 @@ export default function TeamScheduleClient({
   initialPicks,
   rankings,
   teamRecords,
+  sessionRecords,
   backHref,
 }: Props) {
   const router = useRouter()
@@ -167,15 +169,18 @@ export default function TeamScheduleClient({
   const [lastSaved, setLastSaved] = useState<string | null>(null)
 
   // Recompute team records live whenever picks change.
-  // Conference games (which include non-conf games for conf teams) are the source of truth.
-  // Non-conf opponents outside the session fall back to the server-provided actual records.
+  // Priority: conference recompute > session-predicted (other teams user already picked) > actual API records.
   const liveRecords = useMemo(() => {
     const records: Record<string, { wins: number; losses: number }> = {}
-    // Seed with server actual records (covers teams outside this conference)
+    // Layer 1: actual API records (floor for everyone)
     for (const [id, r] of Object.entries(teamRecords)) {
       records[id] = { ...r }
     }
-    // Reset records for conference teams so we recompute from picks
+    // Layer 2: session-predicted records for teams the user has already picked schedules for
+    for (const [id, r] of Object.entries(sessionRecords)) {
+      records[id] = { ...r }
+    }
+    // Layer 3: recompute from scratch for this conference (most accurate for current view)
     for (const t of conferenceTeams) {
       records[t.id] = { wins: 0, losses: 0 }
     }
@@ -197,7 +202,7 @@ export default function TeamScheduleClient({
       records[loserId].losses++
     }
     return records
-  }, [conferenceGames, conferenceTeams, picks, teamRecords])
+  }, [conferenceGames, conferenceTeams, picks, teamRecords, sessionRecords])
 
   const standings = useMemo(
     () => computeStandings(conferenceTeams, conferenceGames, picks),

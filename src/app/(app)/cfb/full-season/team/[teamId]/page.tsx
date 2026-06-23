@@ -5,6 +5,7 @@ import {
   getSession,
   getTeamScheduleForSession,
   getConferenceStandingsData,
+  getSessionTeamRecords,
 } from '@/lib/data/full-season'
 import { getLatestRankings, getActualTeamRecords } from '@/lib/data/cfb'
 import { cfbd } from '@/lib/cfbd/client'
@@ -37,7 +38,7 @@ export default async function FullSeasonTeamPage({
 
   if (!team) notFound()
 
-  const [games, standingsData, rankings, prevRecords, teamRecords] = await Promise.all([
+  const [games, standingsData, rankings, prevRecords, teamRecords, sessionPredictedRecords] = await Promise.all([
     getTeamScheduleForSession(session.id, teamId),
     team.conference_id
       ? getConferenceStandingsData(session.id, team.conference_id)
@@ -45,6 +46,7 @@ export default async function FullSeasonTeamPage({
     getLatestRankings(CURRENT_SEASON),
     cfbd.records(CURRENT_SEASON - 1, team.name).catch(() => [] as Awaited<ReturnType<typeof cfbd.records>>),
     getActualTeamRecords(CURRENT_SEASON),
+    getSessionTeamRecords(session.id),
   ])
 
   const currentRank = rankings.get(teamId) ?? null
@@ -108,6 +110,7 @@ export default async function FullSeasonTeamPage({
         initialPicks={standingsData.picks}
         rankings={Object.fromEntries(rankings)}
         teamRecords={teamRecords}
+        sessionRecords={sessionPredictedRecords}
         season={CURRENT_SEASON}
         backHref="/cfb/full-season"
       />
