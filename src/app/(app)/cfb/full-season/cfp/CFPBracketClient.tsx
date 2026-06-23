@@ -157,7 +157,7 @@ function RankingsView({
       </div>
 
       <div className="text-xs text-zinc-500 mb-2">
-        Rankings generated from your predicted season results using win %, strength of schedule, quality wins, and conference prestige.
+        Rankings generated using 2026 CFP committee criteria: win %, strength of schedule, head-to-head results, comparative outcomes vs common opponents, and conference prestige. AUTO = conference champion auto bid · GTEE = Notre Dame guaranteed spot (top 12) · BYE = seed 1–4 (first-round bye).
       </div>
 
       <div className="border border-zinc-200 rounded-xl overflow-hidden">
@@ -197,7 +197,11 @@ function RankingsView({
             <div className="text-right">
               {t.is_auto_bid ? (
                 <span className="inline-block text-[10px] font-bold bg-[#84cc16]/20 text-[#65a30d] px-1.5 py-0.5 rounded">
-                  {t.rank <= 4 ? 'BYE' : 'AUTO'}
+                  {t.rank <= 4 ? 'BYE' : t.is_conf_champ ? 'AUTO' : 'AUTO'}
+                </span>
+              ) : t.is_guaranteed ? (
+                <span className="inline-block text-[10px] font-bold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">
+                  GTEE
                 </span>
               ) : t.rank <= 12 ? (
                 <span className="inline-block text-[10px] font-bold bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded">

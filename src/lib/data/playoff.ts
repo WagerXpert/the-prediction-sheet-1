@@ -304,6 +304,7 @@ export async function createManualBracket(
       conf_name: r?.conf_name ?? '',
       conf_abbr: r?.conf_abbr ?? '',
       is_auto_bid: true,
+      is_guaranteed: r?.is_guaranteed ?? false,
       is_bye: seed <= 4,
       overall_wins: r?.overall_wins ?? 0,
       overall_losses: r?.overall_losses ?? 0,

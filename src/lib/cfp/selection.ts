@@ -1,13 +1,17 @@
 // CFP selection process: takes ranked teams, produces 12-team seeded field.
-// Real CFP rules (12-team format):
-//   - Each P4 conference champion gets an automatic bid (guaranteed)
-//   - Best non-P4 conference champion gets the 5th automatic bid
-//   - Top 4 auto bids (by rank) receive seeds 1-4 with first-round byes
-//   - Remaining 7 seeds (5-12) filled by 5th auto bid + at-large picks
+// 2026 CFP rules (12-team format):
+//   - 4 Power 4 (ACC, Big 12, Big Ten, SEC) champions get automatic bids
+//   - Highest-ranked Group of 6 (American, CUSA, MAC, Mountain West, Pac-12, Sun Belt) champion gets 5th auto bid
+//   - Notre Dame is guaranteed a spot if ranked top 12 (is_guaranteed flag)
+//   - Seeds 1-4 = the 4 highest-ranked conference champions → first-round byes
+//   - Seeds 5-12 = 5th auto bid + at-large picks, ordered by committee ranking
 
 import type { CFPRankedTeam } from './rankings'
 
-const P4_RE = /SEC|Southeastern|Big Ten|Atlantic Coast|^ACC$|Big 12|Pac.?12/i
+// 2026 Power 4: ACC, Big 12, Big Ten, SEC (Pac-12 removed — now Group of 6)
+const P4_RE = /SEC|Southeastern|Big Ten|Atlantic Coast|^ACC$|Big 12/i
+// Group of 6: American, CUSA, MAC, Mountain West, Pac-12, Sun Belt
+const G6_RE = /American Athletic|Mountain West|Sun Belt|Mid.?American|^MAC$|Conference USA|CUSA|Pac.?12/i
 
 export interface CFPSeed {
   seed: number
@@ -19,6 +23,7 @@ export interface CFPSeed {
   conf_name: string
   conf_abbr: string
   is_auto_bid: boolean
+  is_guaranteed: boolean  // Notre Dame top-12 guarantee
   is_bye: boolean
   overall_wins: number
   overall_losses: number
@@ -28,8 +33,7 @@ export interface CFPSeed {
 }
 
 export function generateCFPField(rankedTeams: CFPRankedTeam[]): CFPSeed[] {
-  // ── Step 1: Guaranteed auto bid for each P4 conference champion ──
-  // Iterate teams in rank order — first conf champ encountered per P4 conf wins
+  // ── Step 1: P4 automatic bids (ACC, Big 12, Big Ten, SEC champions) ──
   const p4AutoBids: CFPRankedTeam[] = []
   const seenP4Confs = new Set<string>()
 
@@ -40,28 +44,43 @@ export function generateCFPField(rankedTeams: CFPRankedTeam[]): CFPSeed[] {
     }
   }
 
-  // ── Step 2: Best-ranked non-P4 (G5) conference champion ─────────
+  // ── Step 2: Group of 6 auto bid — highest-ranked G6 conference champion ──
+  // Eligible: American, CUSA, MAC, Mountain West, Pac-12, Sun Belt
   const takenP4Ids = new Set(p4AutoBids.map(t => t.team_id))
-  const g5AutoBid = rankedTeams.find(
-    t => t.is_conf_champ && !P4_RE.test(t.conf_name) && !takenP4Ids.has(t.team_id)
+  const g6AutoBid = rankedTeams.find(
+    t => t.is_conf_champ && G6_RE.test(t.conf_name) && !takenP4Ids.has(t.team_id)
   ) ?? null
 
-  // All 5 auto bids sorted by CFP rank (best first)
-  const allAutoBids = [...p4AutoBids, ...(g5AutoBid ? [g5AutoBid] : [])]
+  // All auto bids sorted by CFP rank (best first)
+  const allAutoBids = [...p4AutoBids, ...(g6AutoBid ? [g6AutoBid] : [])]
     .sort((a, b) => a.rank - b.rank)
 
-  // ── Step 3: Seeds 1-4 = top 4 auto bids, get first-round byes ───
+  // ── Step 3: Seeds 1-4 = the 4 highest-ranked conference champions → first-round byes ──
+  // Per CFP rules, top 4 seeds are exclusively for the 4 highest-ranked conf champions
   const byeTeams = allAutoBids.slice(0, 4)
   const fifthAuto = allAutoBids[4] ?? null
 
-  // ── Step 4: Seeds 5-12 = 5th auto bid + at-large ────────────────
+  // ── Step 4: Seeds 5-12 = 5th auto bid + at-large (ordered by ranking) ──
+  // Notre Dame is guaranteed a spot if ranked top 12 (is_guaranteed flag from rankings)
   const takenIds = new Set(allAutoBids.map(t => t.team_id))
-  const atLargeNeeded = fifthAuto ? 7 : 8
+
+  // Guaranteed teams (Notre Dame top-12) that aren't already in via auto bid
+  const guaranteed = rankedTeams.filter(
+    t => t.is_guaranteed && !takenIds.has(t.team_id)
+  )
+  const guaranteedIds = new Set(guaranteed.map(t => t.team_id))
+  for (const t of guaranteed) takenIds.add(t.team_id)
+
+  const atLargeNeeded = Math.max(0, 8 - (fifthAuto ? 1 : 0) - guaranteed.length)
   const atLarge = rankedTeams
     .filter(t => !takenIds.has(t.team_id))
     .slice(0, atLargeNeeded)
 
-  const seeds5to12 = [...(fifthAuto ? [fifthAuto] : []), ...atLarge]
+  const seeds5to12 = [
+    ...(fifthAuto ? [fifthAuto] : []),
+    ...guaranteed,
+    ...atLarge,
+  ]
     .sort((a, b) => a.rank - b.rank)
     .slice(0, 8)
 
@@ -77,6 +96,7 @@ export function generateCFPField(rankedTeams: CFPRankedTeam[]): CFPSeed[] {
     conf_name: team.conf_name,
     conf_abbr: team.conf_abbr,
     is_auto_bid: isAutoBid,
+    is_guaranteed: team.is_guaranteed ?? false,
     is_bye: isBye,
     overall_wins: team.overall_wins,
     overall_losses: team.overall_losses,

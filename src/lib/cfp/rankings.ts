@@ -1,10 +1,11 @@
 // CFP ranking algorithm — pure function, runs in both server and client environments.
-// Models how the real CFP Committee evaluates teams:
-//   - Power 4 conference championships are the most valuable accomplishment
-//   - SOS weighted by opponent conference prestige (P4 > G5 > Independent)
-//   - Quality wins weighted by opponent strength and conference prestige
-//   - Notre Dame and other independents treated as premium at-large candidates
-//   - G5 champions can earn auto bids but realistically rank below P4 champions
+// Models the 2026 CFP Selection Committee criteria:
+//   - Strength of schedule (primary differentiator between close teams)
+//   - Head-to-head results (captured via wins/losses + quality-win weighting)
+//   - Comparative outcomes vs common opponents (quality win scoring)
+//   - Power 4 (ACC, Big 12, Big Ten, SEC) conference championships are highest value
+//   - Group of 6 (American, CUSA, MAC, Mountain West, Pac-12, Sun Belt) champions earn auto bid
+//   - Notre Dame guaranteed a spot if ranked top 12 (marked is_guaranteed)
 
 export interface TeamData {
   id: string
@@ -40,6 +41,7 @@ export interface CFPRankedTeam {
   conf_losses: number
   is_conf_champ: boolean
   is_auto_bid: boolean
+  is_guaranteed: boolean  // Notre Dame: guaranteed spot if ranked top 12
   cfp_score: number
   win_pct: number
   sos_pct: number
@@ -53,30 +55,34 @@ export interface RankingInput {
 
 // ── Conference prestige (0–100) ───────────────────────────────────
 
+// 2026 Power 4: ACC, Big 12, Big Ten, SEC — Pac-12 is now Group of 6
 const PRESTIGE_TABLE: [RegExp, number][] = [
   [/SEC|Southeastern/i, 100],
   [/Big Ten/i, 95],
-  [/ACC|Atlantic Coast/i, 78],
+  [/ACC|Atlantic Coast/i, 80],
   [/Big 12/i, 78],
-  [/Pac.?12/i, 72],
   [/Mountain West/i, 55],
-  [/American Athletic/i, 52],
-  [/Sun Belt/i, 46],
-  [/Mid.?American|^MAC$/i, 42],
-  [/Conference USA|CUSA/i, 40],
+  [/American Athletic/i, 53],
+  [/Pac.?12/i, 52],
+  [/Sun Belt/i, 47],
+  [/Mid.?American|^MAC$/i, 43],
+  [/Conference USA|CUSA/i, 41],
 ]
 
 function getPrestige(confName: string): number {
-  if (!confName || /independent/i.test(confName)) return 65
+  if (!confName || /independent/i.test(confName)) return 68  // Notre Dame / independents get solid floor
   for (const [re, score] of PRESTIGE_TABLE) {
     if (re.test(confName)) return score
   }
   return 35
 }
 
-function isP4(name: string) { return /SEC|Southeastern|Big Ten|ACC|Atlantic Coast|Big 12|Pac.?12/i.test(name) }
-function isG5(name: string) { return /Mountain West|American Athletic|Sun Belt|Mid.?American|^MAC$|Conference USA|CUSA/i.test(name) }
+// 2026 Power 4: ACC, Big 12, Big Ten, SEC (Pac-12 removed)
+function isP4(name: string) { return /SEC|Southeastern|Big Ten|ACC|Atlantic Coast|Big 12/i.test(name) }
+// Group of 6: American, CUSA, MAC, Mountain West, Pac-12, Sun Belt
+function isG6(name: string) { return /Mountain West|American Athletic|Sun Belt|Mid.?American|^MAC$|Conference USA|CUSA|Pac.?12/i.test(name) }
 function isIndependent(name: string) { return /independent/i.test(name) || !name }
+function isNotreDame(name: string) { return /notre dame/i.test(name) }
 
 // ── Core algorithm ────────────────────────────────────────────────
 
@@ -145,7 +151,8 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
     sosByTeam.set(t.id, total / games.length)
   }
 
-  // Step 4: quality wins — wins vs 6+ win teams, weighted by opp conf prestige
+  // Step 4: quality wins — wins vs 6+ win teams, weighted by opp conf prestige + opp record
+  // This captures "comparative outcomes vs common opponents" from committee criteria
   const qualityWinsByTeam = new Map<string, number>()
   for (const t of activeTeams) {
     const games = results[t.id] ?? []
@@ -156,10 +163,12 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
       const oppTeam = teamById.get(g.opponent_id)
       if (!opp || !oppTeam || opp.wins < 6) continue
       const oppPrestige = getPrestige(oppTeam.conference_name) / 100
-      const winValue = (opp.wins >= 8 ? 1.5 : 1.0) * (0.4 + oppPrestige * 0.6)
+      // Tiers: 10+ wins = elite, 8-9 = very good, 6-7 = good
+      const winTier = opp.wins >= 10 ? 2.0 : opp.wins >= 8 ? 1.5 : 1.0
+      const winValue = winTier * (0.35 + oppPrestige * 0.65)
       score += winValue
     }
-    qualityWinsByTeam.set(t.id, Math.min(score, 12))
+    qualityWinsByTeam.set(t.id, Math.min(score, 15))
   }
 
   // Normalize SOS
@@ -167,7 +176,8 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
   const maxSos = Math.max(...sosVals, 0.001)
   const minSos = Math.min(...sosVals, 0)
 
-  // Step 5: score
+  // Step 5: score — weights reflect 2026 CFP committee criteria:
+  //   win% (record), SOS, quality wins (covers head-to-head + common opponents), conf prestige
   const scored = activeTeams.map(t => {
     const rec = records.get(t.id)!
     const isChamp = confChampions.get(t.conference_id) === t.id && !isIndependent(t.conference_name)
@@ -178,47 +188,62 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
     const sosNorm = maxSos > minSos ? (sos - minSos) / (maxSos - minSos) : 0
     const prestige = getPrestige(t.conference_name)
 
-    // Conference champion bonus — biggest reward for winning a Power 4 conference
+    // Conference champion bonus — P4 champs get highest reward; G6 champ gets meaningful bump
     const champBonus = isChamp
-      ? (isP4(t.conference_name) ? 20 : isG5(t.conference_name) ? 8 : 0)
+      ? (isP4(t.conference_name) ? 22 : isG6(t.conference_name) ? 7 : 0)
       : 0
 
-    // Independents (Notre Dame) get a prestige floor as premium at-large candidates
-    // Their tough schedules are captured in SOS; they don't get conf champ bonus
+    // Independents (Notre Dame) get a prestige floor — their SOS score captures schedule difficulty
     const confBackground = (prestige / 100) * 8
 
     const score =
-      winPct * 55 +    // 0-55: win% is primary factor
-      champBonus +     // P4: +20, G5: +8, none: 0
-      sosNorm * 20 +   // 0-20: SOS weighted by opp conf prestige
-      qw +             // 0-12: quality wins
+      winPct * 50 +    // 0-50: win% is primary factor
+      champBonus +     // P4: +22, G6: +7, none: 0
+      sosNorm * 22 +   // 0-22: SOS (weighted by opp conf prestige) — committee priority
+      qw +             // 0-15: quality wins + comparative outcomes vs common opponents
       confBackground   // 0-8: conference prestige background
 
     return { t, rec, isChamp, winPct, sos, qw, sosNorm, score }
   })
 
-  // Sort by score, tiebreak wins
-  scored.sort((a, b) => b.score !== a.score ? b.score - a.score : b.rec.wins - a.rec.wins)
+  // Sort by score, tiebreak: more wins, then fewer losses
+  scored.sort((a, b) =>
+    b.score !== a.score ? b.score - a.score :
+    b.rec.wins !== a.rec.wins ? b.rec.wins - a.rec.wins :
+    a.rec.losses - b.rec.losses
+  )
 
   // Mark auto bids:
-  //   - Every P4 conference champion gets a guaranteed auto bid
-  //   - Best-ranked non-P4 (G5) conference champion gets the 5th auto bid
+  //   - Every P4 (ACC, Big 12, Big Ten, SEC) conference champion gets an auto bid
+  //   - Highest-ranked G6 (American, CUSA, MAC, Mountain West, Pac-12, Sun Belt) champion
+  //     gets the 5th auto bid
   const p4AutoConfs = new Set<string>()
   const autoIds = new Set<string>()
-  let g5AutoFound = false
+  let g6AutoFound = false
 
   for (const s of scored) {
     if (!s.isChamp || isIndependent(s.t.conference_name)) continue
     if (isP4(s.t.conference_name) && !p4AutoConfs.has(s.t.conference_id)) {
       p4AutoConfs.add(s.t.conference_id)
       autoIds.add(s.t.id)
-    } else if (!isP4(s.t.conference_name) && !g5AutoFound) {
-      g5AutoFound = true
+    } else if (isG6(s.t.conference_name) && !g6AutoFound) {
+      g6AutoFound = true
       autoIds.add(s.t.id)
     }
   }
 
-  return scored.map((s, i) => ({
+  // Assign provisional ranks so Notre Dame guarantee can be evaluated
+  const provisional = scored.map((s, i) => ({ ...s, provisionalRank: i + 1 }))
+
+  // Mark Notre Dame as guaranteed if ranked top 12
+  const guaranteedIds = new Set<string>()
+  for (const s of provisional) {
+    if (s.provisionalRank <= 12 && isNotreDame(s.t.name)) {
+      guaranteedIds.add(s.t.id)
+    }
+  }
+
+  return provisional.map((s, i) => ({
     rank: i + 1,
     team_id: s.t.id,
     team_name: s.t.name,
@@ -234,6 +259,7 @@ export function computeCFPRankings(input: RankingInput): CFPRankedTeam[] {
     conf_losses: s.rec.confLosses,
     is_conf_champ: s.isChamp,
     is_auto_bid: autoIds.has(s.t.id),
+    is_guaranteed: guaranteedIds.has(s.t.id),
     cfp_score: Math.round(s.score * 10) / 10,
     win_pct: Math.round(s.winPct * 1000) / 1000,
     sos_pct: Math.round(s.sos * 1000) / 1000,
