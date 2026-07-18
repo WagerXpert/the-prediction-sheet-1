@@ -8,29 +8,32 @@ import {
   getSessionTeamRecords,
 } from '@/lib/data/full-season'
 import { getLatestRankings, getActualTeamRecords } from '@/lib/data/cfb'
+import { getProfileSummary } from '@/lib/data/profiles'
 import { cfbd } from '@/lib/cfbd/client'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
-import TeamScheduleClient from './TeamScheduleClient'
-import BackLink from '../../BackLink'
+import TeamScheduleClient from '@/app/(app)/cfb/full-season/team/[teamId]/TeamScheduleClient'
+import ViewBanner from '../../../../ViewBanner'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Team Schedule — Full Season Mode' }
+export const metadata: Metadata = { title: 'Viewing Team Schedule' }
 
-export default async function FullSeasonTeamPage({
+export default async function ViewFullSeasonTeamPage({
   params,
 }: {
-  params: Promise<{ teamId: string }>
+  params: Promise<{ userId: string; teamId: string }>
 }) {
-  const { teamId } = await params
+  const { userId, teamId } = await params
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login?redirectTo=/cfb/full-season')
+  if (!user) redirect('/login?redirectTo=/leaderboard')
 
-  const session = await getSession(user.id)
-  if (!session) redirect('/cfb/full-season/setup')
+  const profile = await getProfileSummary(userId)
+  if (!profile) notFound()
 
-  // Fetch team info
+  const session = await getSession(userId)
+  if (!session) notFound()
+
   const { data: team } = await supabase
     .from('teams')
     .select('id, name, abbreviation, mascot, logo_url, color, conference_id, external_id')
@@ -57,18 +60,18 @@ export default async function FullSeasonTeamPage({
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
-      {/* Breadcrumb */}
+      <ViewBanner displayName={profile.displayName} backHref={`/leaderboard/view/${userId}/full-season`} />
+
       <div className="mb-2 flex items-center gap-2 text-sm text-zinc-400">
-        <Link href="/cfb" className="hover:text-black transition-colors">CFB Hub</Link>
+        <Link href="/leaderboard" className="hover:text-black transition-colors">Leaderboard</Link>
         <span>/</span>
-        <Link href="/cfb/full-season" className="hover:text-black transition-colors">Full Season Mode</Link>
+        <Link href={`/leaderboard/view/${userId}/full-season`} className="hover:text-black transition-colors">
+          {profile.displayName}&apos;s Full Season
+        </Link>
         <span>/</span>
         <span className="text-zinc-700 font-medium">{team.name}</span>
       </div>
 
-      <BackLink />
-
-      {/* Team header */}
       <div className="flex items-center gap-4 mb-8">
         {team.logo_url ? (
           <img src={team.logo_url} alt={team.name} className="w-16 h-16 object-contain" />
@@ -115,7 +118,8 @@ export default async function FullSeasonTeamPage({
         teamRecords={teamRecords}
         sessionRecords={sessionPredictedRecords}
         season={CURRENT_SEASON}
-        backHref="/cfb/full-season"
+        backHref={`/leaderboard/view/${userId}/full-season`}
+        readOnly
       />
     </div>
   )

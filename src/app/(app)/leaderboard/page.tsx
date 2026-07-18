@@ -193,13 +193,37 @@ function SeasonTable({
                   <RankBadge rank={entry.rank} />
                 </td>
                 <td className="px-4 py-3.5">
-                  <span className={`font-semibold ${isMe ? 'text-black' : ''}`}>
-                    {entry.displayName}
-                  </span>
-                  {entry.username && (
-                    <span className="ml-2 text-xs text-zinc-400">@{entry.username}</span>
-                  )}
-                  {isMe && <YouBadge />}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {entry.championPick?.team_logo && (
+                      <img
+                        src={entry.championPick.team_logo}
+                        alt={entry.championPick.team_name}
+                        title={`Picked ${entry.championPick.team_name} to win the CFP`}
+                        className="w-4 h-4 object-contain shrink-0"
+                      />
+                    )}
+                    {entry.fullSeasonSessionId ? (
+                      <Link
+                        href={`/leaderboard/view/${entry.userId}/full-season`}
+                        className={`font-semibold hover:underline underline-offset-2 ${isMe ? 'text-black' : ''}`}
+                      >
+                        {entry.displayName}
+                      </Link>
+                    ) : (
+                      <span className={`font-semibold ${isMe ? 'text-black' : ''}`}>
+                        {entry.displayName}
+                      </span>
+                    )}
+                    {entry.username && (
+                      <span className="text-xs text-zinc-400">@{entry.username}</span>
+                    )}
+                    {entry.fullSeasonSessionId && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-500">
+                        {entry.fullSeasonGamesPicked} picked
+                      </span>
+                    )}
+                    {isMe && <YouBadge />}
+                  </div>
                 </td>
                 <td className="px-4 py-3.5 text-center text-zinc-600">{entry.gamePoints}</td>
                 <td className="px-4 py-3.5 text-center text-zinc-600">{entry.recordPoints}</td>
@@ -247,7 +271,6 @@ function WeeklyTable({
             <th className="text-left px-5 py-3 w-12">#</th>
             <th className="text-left px-4 py-3">Player</th>
             <th className="text-center px-4 py-3">Correct</th>
-            <th className="text-center px-4 py-3">Picked</th>
             <th className="text-center px-5 py-3">Points</th>
           </tr>
         </thead>
@@ -267,19 +290,24 @@ function WeeklyTable({
                   <RankBadge rank={entry.rank} />
                 </td>
                 <td className="px-4 py-3.5">
-                  <span className={`font-semibold ${isMe ? 'text-black' : ''}`}>
-                    {entry.displayName}
-                  </span>
-                  {entry.username && (
-                    <span className="ml-2 text-xs text-zinc-400">@{entry.username}</span>
-                  )}
-                  {isMe && <YouBadge />}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Link
+                      href={`/leaderboard/view/${entry.userId}/pickem?week=${week}`}
+                      className={`font-semibold hover:underline underline-offset-2 ${isMe ? 'text-black' : ''}`}
+                    >
+                      {entry.displayName}
+                    </Link>
+                    {entry.username && (
+                      <span className="text-xs text-zinc-400">@{entry.username}</span>
+                    )}
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-500">
+                      {entry.total} picked
+                    </span>
+                    {isMe && <YouBadge />}
+                  </div>
                 </td>
                 <td className="px-4 py-3.5 text-center font-semibold text-zinc-700">
                   {entry.correct}/{entry.total}
-                </td>
-                <td className="px-4 py-3.5 text-center text-zinc-400 text-xs">
-                  {entry.total} games
                 </td>
                 <td className="px-5 py-3.5 text-center">
                   <span className="font-black text-base">{entry.points}</span>

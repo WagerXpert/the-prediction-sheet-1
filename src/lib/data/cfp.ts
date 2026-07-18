@@ -99,10 +99,12 @@ export async function getConfChampGames(bracketId: string): Promise<CFPConfChamp
     .select('*')
     .eq('bracket_id', bracketId)
     .order('conference_name')
-  return (data ?? []).map(row => ({
-    ...(row as any),
-    conference_logo: getConferenceLogo(row.conference_name),
-  })) as CFPConfChampGame[]
+  return (data ?? [])
+    .filter(row => !/independent/i.test((row as any).conference_name))
+    .map(row => ({
+      ...(row as any),
+      conference_logo: getConferenceLogo(row.conference_name),
+    })) as CFPConfChampGame[]
 }
 
 export async function saveConfChampPick(gameId: string, winnerTeamId: string): Promise<void> {
@@ -298,6 +300,7 @@ async function generateConfChampionshipGames(
     if (teamIds.length < 2) continue
     const conf = data.teams.find(t => t.conference_id === confId)
     if (!conf) continue
+    if (/independent/i.test(conf.conference_name)) continue
 
     // Only generate if teams in this conf have at least some game data
     const teamsWithData = teamIds.filter(id => {
@@ -516,6 +519,53 @@ export async function getCFPPicks(bracketId: string): Promise<CFPPick[]> {
     .select('bracket_id, round, game_index, winner_team_id')
     .eq('bracket_id', bracketId)
   return (data ?? []) as unknown as CFPPick[]
+}
+
+export interface CFPChampionPick {
+  session_id: string
+  team_id: string
+  team_name: string
+  team_abbr: string | null
+  team_logo: string | null
+}
+
+// Batch-fetch each session's picked national champion (round 4, game 0), if any.
+// Used by the leaderboard to show a champion-pick icon without an N+1 query per user.
+export async function getChampionPicksBySessionIds(sessionIds: string[]): Promise<Map<string, CFPChampionPick>> {
+  const result = new Map<string, CFPChampionPick>()
+  if (!sessionIds.length) return result
+
+  const supabase = await createClient()
+  const { data: brackets } = await supabase
+    .from('cfp_brackets')
+    .select('id, session_id, seedings')
+    .in('session_id', sessionIds)
+  if (!brackets?.length) return result
+
+  const bracketIds = brackets.map(b => b.id)
+  const { data: picks } = await supabase
+    .from('cfp_picks')
+    .select('bracket_id, winner_team_id')
+    .in('bracket_id', bracketIds)
+    .eq('round', 4)
+    .eq('game_index', 0)
+  const winnerByBracket = new Map((picks ?? []).map(p => [p.bracket_id, p.winner_team_id]))
+
+  for (const b of brackets) {
+    const winnerId = winnerByBracket.get(b.id)
+    if (!winnerId) continue
+    const seedings = (b.seedings as unknown as CFPSeed[]) ?? []
+    const seed = seedings.find(s => s.team_id === winnerId)
+    if (!seed) continue
+    result.set(b.session_id, {
+      session_id: b.session_id,
+      team_id: winnerId,
+      team_name: seed.team_name,
+      team_abbr: seed.team_abbr,
+      team_logo: seed.team_logo,
+    })
+  }
+  return result
 }
 
 // ── Reset everything ──────────────────────────────────────────────

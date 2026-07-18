@@ -79,6 +79,44 @@ export async function getSession(userId: string, season = CURRENT_SEASON): Promi
   return data ?? null
 }
 
+// Batch lookup: one session per user (if any) for the given season. Used by the
+// leaderboard to avoid an N+1 query per row.
+export async function getSessionsByUserIds(userIds: string[], season = CURRENT_SEASON): Promise<Map<string, FSSession>> {
+  const result = new Map<string, FSSession>()
+  if (!userIds.length) return result
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('full_season_sessions')
+    .select('id, user_id, sport_id, season, name')
+    .in('user_id', userIds)
+    .eq('sport_id', 'cfb')
+    .eq('season', season)
+    .order('created_at', { ascending: false })
+
+  for (const row of data ?? []) {
+    if (!result.has(row.user_id)) result.set(row.user_id, row as FSSession)
+  }
+  return result
+}
+
+// Batch count of games picked (winner set) per session. Used by the leaderboard.
+export async function getGamesPickedCounts(sessionIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  if (!sessionIds.length) return counts
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('full_season_predictions')
+    .select('session_id')
+    .in('session_id', sessionIds)
+
+  for (const row of data ?? []) {
+    counts.set(row.session_id, (counts.get(row.session_id) ?? 0) + 1)
+  }
+  return counts
+}
+
 export async function getOrCreateSession(userId: string, season = CURRENT_SEASON): Promise<FSSession | null> {
   const existing = await getSession(userId, season)
   if (existing) return existing

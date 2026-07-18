@@ -6,10 +6,12 @@ function getHeaders(): HeadersInit {
   return { Authorization: `Bearer ${key}` }
 }
 
-async function cfbdFetch<T>(path: string): Promise<T> {
+async function cfbdFetch<T>(path: string, opts?: { revalidateSeconds?: number }): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: getHeaders(),
-    cache: 'no-store',
+    ...(opts?.revalidateSeconds
+      ? { next: { revalidate: opts.revalidateSeconds } }
+      : { cache: 'no-store' }),
   })
   if (!res.ok) {
     const body = await res.text().catch(() => '')
@@ -92,10 +94,13 @@ export const cfbd = {
   weekGames: (year: number, week: number, seasonType = 'regular') =>
     cfbdFetch<CfbdGame[]>(`/games?year=${year}&week=${week}&seasonType=${seasonType}`),
 
+  // Cached for 12h — final prior-season records never change mid-cache-window,
+  // and fetching the whole season in one call (rather than one call per team)
+  // keeps this well under CFBD's monthly quota even with heavy page traffic.
   records: (year: number, team?: string) => {
     let path = `/records?year=${year}`
     if (team) path += `&team=${encodeURIComponent(team)}`
-    return cfbdFetch<CfbdRecord[]>(path)
+    return cfbdFetch<CfbdRecord[]>(path, { revalidateSeconds: 60 * 60 * 12 })
   },
 
   rankings: (year: number, week?: number, seasonType = 'regular') => {

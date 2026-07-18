@@ -17,6 +17,7 @@ interface Props {
   sessionRecords: Record<string, { wins: number; losses: number }>
   season: number
   backHref: string
+  readOnly?: boolean
 }
 
 function formatShortDate(dateStr: string | null): string {
@@ -84,6 +85,7 @@ function TeamPickButton({
   rank,
   record,
   onClick,
+  disabledOverride = false,
 }: {
   team: FSGame['home_team'] | null
   pickedId: string | null
@@ -93,6 +95,7 @@ function TeamPickButton({
   rank?: number
   record?: { wins: number; losses: number }
   onClick: () => void
+  disabledOverride?: boolean
 }) {
   if (!team) {
     return <div className="flex-1 px-3 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-300">TBD</div>
@@ -121,7 +124,7 @@ function TeamPickButton({
   }
 
   return (
-    <button onClick={onClick} disabled={isCompleted} className={cls}>
+    <button onClick={onClick} disabled={isCompleted || disabledOverride} className={cls}>
       <span className="flex items-center gap-2">
         {team.logo_url && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -154,6 +157,7 @@ export default function TeamScheduleClient({
   teamRecords,
   sessionRecords,
   backHref,
+  readOnly = false,
 }: Props) {
   const router = useRouter()
 
@@ -363,7 +367,7 @@ export default function TeamScheduleClient({
                               <span className="w-1.5 h-1.5 rounded-full bg-[#84cc16] animate-pulse inline-block" />
                               Saving…
                             </span>
-                          ) : pickedId ? (
+                          ) : pickedId && !readOnly ? (
                             <button
                               onClick={() => {
                                 const newPicks = { ...picks }
@@ -390,6 +394,7 @@ export default function TeamScheduleClient({
                           rank={game.away_team ? rankings[game.away_team.id] : undefined}
                           record={game.away_team ? liveRecords[game.away_team.id] : undefined}
                           onClick={() => game.away_team && handlePick(game.id, game.away_team.id)}
+                          disabledOverride={readOnly}
                         />
                         <span className="text-zinc-300 text-xs font-semibold shrink-0">
                           {game.neutral_site ? 'vs' : '@'}
@@ -403,6 +408,7 @@ export default function TeamScheduleClient({
                           rank={game.home_team ? rankings[game.home_team.id] : undefined}
                           record={game.home_team ? liveRecords[game.home_team.id] : undefined}
                           onClick={() => game.home_team && handlePick(game.id, game.home_team.id)}
+                          disabledOverride={readOnly}
                         />
                       </div>
                     </div>
@@ -415,7 +421,7 @@ export default function TeamScheduleClient({
       )}
 
       {/* Done / Save Picks */}
-      {initialGames.length > 0 && (
+      {initialGames.length > 0 && !readOnly && (
         <div className="mt-6 pt-5 border-t border-zinc-100 flex items-center justify-between gap-4">
           <p className="text-sm text-zinc-400">
             {gamesLeft === 0

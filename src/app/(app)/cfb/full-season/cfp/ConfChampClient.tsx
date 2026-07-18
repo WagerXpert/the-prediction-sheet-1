@@ -8,6 +8,7 @@ import { saveConfChampPickAction, generateBracketSeedingsAction } from './action
 interface Props {
   bracket: CFPBracket
   confChampGames: CFPConfChampGame[]
+  readOnly?: boolean
 }
 
 function TeamCard({
@@ -22,6 +23,7 @@ function TeamCard({
   confLosses,
   isPicked,
   onClick,
+  disabled = false,
 }: {
   teamId: string | null
   name: string
@@ -34,6 +36,7 @@ function TeamCard({
   confLosses: number
   isPicked: boolean
   onClick: () => void
+  disabled?: boolean
 }) {
   if (!teamId) {
     return (
@@ -46,10 +49,13 @@ function TeamCard({
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`flex-1 rounded-xl border-2 transition-all text-left p-4 ${
         isPicked
           ? 'border-[#84cc16] bg-[#84cc16]/10 shadow-md'
-          : 'border-zinc-200 bg-white hover:border-zinc-400 hover:shadow-sm'
+          : disabled
+            ? 'border-zinc-200 bg-white cursor-default'
+            : 'border-zinc-200 bg-white hover:border-zinc-400 hover:shadow-sm'
       }`}
     >
       <div className="flex items-center gap-3 mb-2">
@@ -81,7 +87,7 @@ function TeamCard({
   )
 }
 
-export default function ConfChampClient({ bracket, confChampGames }: Props) {
+export default function ConfChampClient({ bracket, confChampGames, readOnly = false }: Props) {
   const router = useRouter()
   const [picks, setPicks] = useState<Map<string, string>>(() => {
     const m = new Map<string, string>()
@@ -98,6 +104,7 @@ export default function ConfChampClient({ bracket, confChampGames }: Props) {
   const totalGames = confChampGames.length
 
   function handlePick(gameId: string, teamId: string) {
+    if (readOnly) return
     if (picks.get(gameId) === teamId) return
     setPicks(prev => new Map(prev).set(gameId, teamId))
     startTransition(async () => {
@@ -170,18 +177,20 @@ export default function ConfChampClient({ bracket, confChampGames }: Props) {
             />
           </div>
         </div>
-        <button
-          onClick={handleGenerateBracket}
-          disabled={isGenerating || isPending}
-          className="shrink-0 font-bold px-5 py-2.5 rounded-xl transition-all text-sm bg-[#84cc16] text-black hover:bg-[#65a30d] shadow-sm disabled:opacity-60"
-        >
-          {isGenerating
-            ? 'Generating…'
-            : allPicked
-              ? 'Generate CFP Rankings & Bracket →'
-              : 'Continue to CFP Bracket →'
-          }
-        </button>
+        {!readOnly && (
+          <button
+            onClick={handleGenerateBracket}
+            disabled={isGenerating || isPending}
+            className="shrink-0 font-bold px-5 py-2.5 rounded-xl transition-all text-sm bg-[#84cc16] text-black hover:bg-[#65a30d] shadow-sm disabled:opacity-60"
+          >
+            {isGenerating
+              ? 'Generating…'
+              : allPicked
+                ? 'Generate CFP Rankings & Bracket →'
+                : 'Continue to CFP Bracket →'
+            }
+          </button>
+        )}
       </div>
 
       {/* Championship game cards */}
@@ -235,6 +244,7 @@ export default function ConfChampClient({ bracket, confChampGames }: Props) {
                   confLosses={game.team_a_conf_losses}
                   isPicked={pickedId === game.team_a_id}
                   onClick={() => game.team_a_id && handlePick(game.id, game.team_a_id)}
+                  disabled={readOnly}
                 />
 
                 <div className="text-center shrink-0">
@@ -253,6 +263,7 @@ export default function ConfChampClient({ bracket, confChampGames }: Props) {
                   confLosses={game.team_b_conf_losses}
                   isPicked={pickedId === game.team_b_id}
                   onClick={() => game.team_b_id && handlePick(game.id, game.team_b_id)}
+                  disabled={readOnly}
                 />
               </div>
             </div>

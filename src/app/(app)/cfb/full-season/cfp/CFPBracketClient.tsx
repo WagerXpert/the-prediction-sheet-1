@@ -10,6 +10,7 @@ interface Props {
   bracket: CFPBracket
   initialPicks: CFPPick[]
   sessionId: string
+  readOnly?: boolean
 }
 
 // ── Team card used inside a game box ──────────────────────────────
@@ -73,6 +74,7 @@ function GameCard({
   teamBSource,
   winnerId,
   onPick,
+  readOnly = false,
 }: {
   round: number
   gameIndex: number
@@ -82,8 +84,9 @@ function GameCard({
   teamBSource?: string
   winnerId: string | null
   onPick: (teamId: string) => void
+  readOnly?: boolean
 }) {
-  const canPick = !!(teamA && teamB)
+  const canPick = !!(teamA && teamB) && !readOnly
 
   const roundLabels: Record<number, string> = {
     1: 'First Round',
@@ -131,22 +134,26 @@ function RankingsView({
   rankings,
   onClose,
   onCustomize,
+  readOnly = false,
 }: {
   rankings: CFPRankedTeam[]
   onClose: () => void
   onCustomize: () => void
+  readOnly?: boolean
 }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-black">CFP Rankings</h2>
         <div className="flex gap-2">
-          <button
-            onClick={onCustomize}
-            className="text-sm font-semibold px-4 py-2 rounded-lg border border-zinc-300 hover:border-zinc-400 transition-colors"
-          >
-            Customize
-          </button>
+          {!readOnly && (
+            <button
+              onClick={onCustomize}
+              className="text-sm font-semibold px-4 py-2 rounded-lg border border-zinc-300 hover:border-zinc-400 transition-colors"
+            >
+              Customize
+            </button>
+          )}
           <button
             onClick={onClose}
             className="text-sm font-semibold px-4 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 transition-colors"
@@ -372,10 +379,12 @@ function BracketView({
   seeds,
   picks,
   onPick,
+  readOnly = false,
 }: {
   seeds: CFPSeed[]
   picks: Map<string, string>
   onPick: (round: number, gameIndex: number, teamId: string) => void
+  readOnly?: boolean
 }) {
   const seedById = new Map(seeds.map(s => [s.team_id, s]))
 
@@ -415,6 +424,7 @@ function BracketView({
                   teamBSource={g.teamBSource}
                   winnerId={picks.get(`${g.round}-${g.gameIndex}`) ?? null}
                   onPick={(id) => onPick(g.round, g.gameIndex, id)}
+                  readOnly={readOnly}
                 />
               </div>
             ))}
@@ -436,6 +446,7 @@ function BracketView({
                 teamBSource={g.teamBSource}
                 winnerId={picks.get(`${g.round}-${g.gameIndex}`) ?? null}
                 onPick={(id) => onPick(g.round, g.gameIndex, id)}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -456,6 +467,7 @@ function BracketView({
                 teamBSource={g.teamBSource}
                 winnerId={picks.get(`${g.round}-${g.gameIndex}`) ?? null}
                 onPick={(id) => onPick(g.round, g.gameIndex, id)}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -476,6 +488,7 @@ function BracketView({
                 teamBSource={g.teamBSource}
                 winnerId={picks.get(`${g.round}-${g.gameIndex}`) ?? null}
                 onPick={(id) => onPick(g.round, g.gameIndex, id)}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -506,6 +519,7 @@ function BracketView({
                   teamBSource={g.teamBSource}
                   winnerId={picks.get(`${g.round}-${g.gameIndex}`) ?? null}
                   onPick={(id) => onPick(g.round, g.gameIndex, id)}
+                  readOnly={readOnly}
                 />
               ))}
             </div>
@@ -518,7 +532,7 @@ function BracketView({
 
 // ── Root client component ─────────────────────────────────────────
 
-export default function CFPBracketClient({ bracket, initialPicks, sessionId }: Props) {
+export default function CFPBracketClient({ bracket, initialPicks, sessionId, readOnly = false }: Props) {
   type View = 'bracket' | 'rankings' | 'customize'
   const [view, setView] = useState<View>('bracket')
   const [isPending, startTransition] = useTransition()
@@ -537,6 +551,7 @@ export default function CFPBracketClient({ bracket, initialPicks, sessionId }: P
   const seedById = new Map(currentSeedings.map(s => [s.team_id, s]))
 
   function handlePick(round: number, gameIndex: number, teamId: string) {
+    if (readOnly) return
     const key = `${round}-${gameIndex}`
     const oldWinner = picks.get(key)
     if (oldWinner === teamId) return
@@ -638,21 +653,23 @@ export default function CFPBracketClient({ bracket, initialPicks, sessionId }: P
             </div>
           </div>
 
-          <div className="flex gap-2 shrink-0">
-            <button
-              onClick={() => setView('customize')}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-300 hover:border-zinc-400 transition-colors"
-            >
-              Customize Bracket
-            </button>
-            <button
-              onClick={handleRegenerate}
-              disabled={isRegenerating || isPending}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-300 hover:border-zinc-400 transition-colors disabled:opacity-50"
-            >
-              {isRegenerating ? 'Regenerating…' : 'Regenerate'}
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => setView('customize')}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-300 hover:border-zinc-400 transition-colors"
+              >
+                Customize Bracket
+              </button>
+              <button
+                onClick={handleRegenerate}
+                disabled={isRegenerating || isPending}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-300 hover:border-zinc-400 transition-colors disabled:opacity-50"
+              >
+                {isRegenerating ? 'Regenerating…' : 'Regenerate'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -661,16 +678,17 @@ export default function CFPBracketClient({ bracket, initialPicks, sessionId }: P
 
       {/* Views */}
       {view === 'bracket' && (
-        <BracketView seeds={currentSeedings} picks={picks} onPick={handlePick} />
+        <BracketView seeds={currentSeedings} picks={picks} onPick={handlePick} readOnly={readOnly} />
       )}
       {view === 'rankings' && (
         <RankingsView
           rankings={currentRankings}
           onClose={() => setView('bracket')}
           onCustomize={() => setView('customize')}
+          readOnly={readOnly}
         />
       )}
-      {view === 'customize' && (
+      {view === 'customize' && !readOnly && (
         <CustomizeView
           rankings={currentRankings}
           onSave={handleSaveCustom}

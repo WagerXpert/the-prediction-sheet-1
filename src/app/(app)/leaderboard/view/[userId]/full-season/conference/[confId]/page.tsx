@@ -3,25 +3,29 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getSession, getSessionDashboard } from '@/lib/data/full-season'
 import { getLatestRankings } from '@/lib/data/cfb'
+import { getProfileSummary } from '@/lib/data/profiles'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
-import BackLink from '../../BackLink'
+import ViewBanner from '../../../../ViewBanner'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Conference Standings — Full Season Mode' }
+export const metadata: Metadata = { title: 'Viewing Conference Standings' }
 
-export default async function FullSeasonConferencePage({
+export default async function ViewFullSeasonConferencePage({
   params,
 }: {
-  params: Promise<{ confId: string }>
+  params: Promise<{ userId: string; confId: string }>
 }) {
-  const { confId } = await params
+  const { userId, confId } = await params
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login?redirectTo=/cfb/full-season')
+  if (!user) redirect('/login?redirectTo=/leaderboard')
 
-  const session = await getSession(user.id)
-  if (!session) redirect('/cfb/full-season/setup')
+  const profile = await getProfileSummary(userId)
+  if (!profile) notFound()
+
+  const session = await getSession(userId)
+  if (!session) notFound()
 
   const [conferences, rankings] = await Promise.all([
     getSessionDashboard(session.id, CURRENT_SEASON),
@@ -39,18 +43,18 @@ export default async function FullSeasonConferencePage({
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10">
-      {/* Breadcrumb */}
+      <ViewBanner displayName={profile.displayName} backHref={`/leaderboard/view/${userId}/full-season`} />
+
       <div className="mb-2 flex items-center gap-2 text-sm text-zinc-400">
-        <Link href="/cfb" className="hover:text-black transition-colors">CFB Hub</Link>
+        <Link href="/leaderboard" className="hover:text-black transition-colors">Leaderboard</Link>
         <span>/</span>
-        <Link href="/cfb/full-season" className="hover:text-black transition-colors">Full Season Mode</Link>
+        <Link href={`/leaderboard/view/${userId}/full-season`} className="hover:text-black transition-colors">
+          {profile.displayName}&apos;s Full Season
+        </Link>
         <span>/</span>
         <span className="text-zinc-700 font-medium">{conf.name}</span>
       </div>
 
-      <BackLink />
-
-      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         {conf.logo_url ? (
           <img src={conf.logo_url} alt={conf.name} className="w-14 h-14 object-contain" />
@@ -61,11 +65,10 @@ export default async function FullSeasonConferencePage({
         )}
         <div>
           <h1 className="text-3xl font-black">{conf.name}</h1>
-          <p className="text-zinc-400 text-sm mt-0.5">Projected standings based on your picks</p>
+          <p className="text-zinc-400 text-sm mt-0.5">{profile.displayName}&apos;s projected standings</p>
         </div>
       </div>
 
-      {/* Standings table */}
       <div className="rounded-xl border border-zinc-200 overflow-hidden">
         <div className="px-4 py-2.5 bg-zinc-50 border-b border-zinc-100 flex items-center">
           <span className="w-8 text-[10px] font-bold uppercase tracking-widest text-zinc-400"></span>
@@ -82,7 +85,7 @@ export default async function FullSeasonConferencePage({
           return (
             <Link
               key={team.id}
-              href={`/cfb/full-season/team/${team.id}`}
+              href={`/leaderboard/view/${userId}/full-season/team/${team.id}`}
               className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors"
             >
               <span className="w-5 text-sm font-black text-zinc-300 shrink-0">{idx + 1}</span>
@@ -116,10 +119,6 @@ export default async function FullSeasonConferencePage({
           )
         })}
       </div>
-
-      <p className="mt-4 text-xs text-zinc-400 text-center">
-        Records reflect your picks + any completed games. Click a team to make picks.
-      </p>
     </div>
   )
 }

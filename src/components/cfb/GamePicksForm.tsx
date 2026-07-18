@@ -16,6 +16,8 @@ interface Props {
   existing: Record<string, string>
   results: Record<string, GamePickResult>
   teamRecords: Record<string, { wins: number; losses: number }>
+  readOnly?: boolean
+  baseHref?: string
 }
 
 function formatGameDate(dateStr: string | null): string {
@@ -43,8 +45,8 @@ function TrashIcon() {
   )
 }
 
-export default function GamePicksForm({ userId, week, weeks, openWeek, games, existing, results, teamRecords }: Props) {
-  const isLocked = openWeek !== null && week !== openWeek
+export default function GamePicksForm({ userId, week, weeks, openWeek, games, existing, results, teamRecords, readOnly = false, baseHref = '/cfb/game-picks' }: Props) {
+  const isLocked = readOnly || (openWeek !== null && week !== openWeek)
   const isAllComplete = openWeek === null
 
   const [picks, setPicks] = useState<Record<string, string>>(() => ({ ...existing }))
@@ -153,7 +155,7 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
           return (
             <Link
               key={w}
-              href={`/cfb/game-picks?week=${w}`}
+              href={`${baseHref}?week=${w}`}
               className={`relative px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
                 isSelected
                   ? 'bg-black text-white border-black'
@@ -176,7 +178,7 @@ export default function GamePicksForm({ userId, week, weeks, openWeek, games, ex
       </div>
 
       {/* Lock banner for past/future weeks */}
-      {isLocked && !isAllComplete && (
+      {isLocked && !isAllComplete && !readOnly && (
         <div className="mb-6 flex items-start gap-3 px-4 py-3.5 rounded-xl bg-zinc-50 border border-zinc-200">
           <span className="text-base shrink-0 mt-0.5">🔒</span>
           <div>

@@ -6,6 +6,7 @@ import { initCFPSession, computeAndSaveBracketSeedings, getCFPPicks } from '@/li
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 import ConfChampClient from './ConfChampClient'
 import CFPBracketClient from './CFPBracketClient'
+import BackLink from '../BackLink'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'CFP Bracket — Full Season Mode' }
@@ -60,6 +61,7 @@ export default async function CFPBracketPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
         <Breadcrumb />
+        <BackLink />
         <div className="mb-8">
           <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-1">
             {CURRENT_SEASON} · Conference Championship Week
@@ -79,6 +81,7 @@ export default async function CFPBracketPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
       <Breadcrumb />
+      <BackLink />
       <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
         <div>
           <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-1">

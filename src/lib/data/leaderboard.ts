@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
+import { getSessionsByUserIds, getGamesPickedCounts } from '@/lib/data/full-season'
+import { getChampionPicksBySessionIds, type CFPChampionPick } from '@/lib/data/cfp'
 
 export interface LeaderboardEntry {
   userId: string
@@ -10,6 +12,10 @@ export interface LeaderboardEntry {
   standingsPoints: number
   totalPoints: number
   rank: number
+  // Full Season Mode extras — present only if the user has a Full Season session
+  fullSeasonSessionId: string | null
+  fullSeasonGamesPicked: number
+  championPick: CFPChampionPick | null
 }
 
 export interface WeeklyEntry {
@@ -74,11 +80,21 @@ export async function getSeasonLeaderboard(): Promise<LeaderboardEntry[]> {
     profileMap[p.id] = { display_name: p.display_name, username: p.username }
   }
 
+  // Full Season Mode extras: games-picked counter + CFP champion pick icon.
+  // Batched to avoid an N+1 query per leaderboard row.
+  const fsSessionByUser = await getSessionsByUserIds(userIds)
+  const fsSessionIds = [...fsSessionByUser.values()].map(s => s.id)
+  const [gamesPickedBySession, championBySession] = await Promise.all([
+    getGamesPickedCounts(fsSessionIds),
+    getChampionPicksBySessionIds(fsSessionIds),
+  ])
+
   const entries = userIds.map((userId) => {
     const profile = profileMap[userId]
     const gamePoints = gameMap[userId] ?? 0
     const recordPoints = recordMap[userId] ?? 0
     const standingsPoints = standingsMap[userId] ?? 0
+    const fsSession = fsSessionByUser.get(userId) ?? null
     return {
       userId,
       displayName: profile?.display_name ?? 'Anonymous',
@@ -88,6 +104,9 @@ export async function getSeasonLeaderboard(): Promise<LeaderboardEntry[]> {
       standingsPoints,
       totalPoints: gamePoints + recordPoints + standingsPoints,
       rank: 0,
+      fullSeasonSessionId: fsSession?.id ?? null,
+      fullSeasonGamesPicked: fsSession ? (gamesPickedBySession.get(fsSession.id) ?? 0) : 0,
+      championPick: fsSession ? (championBySession.get(fsSession.id) ?? null) : null,
     }
   })
 
