@@ -1,0 +1,18 @@
+name: Hourly CFB Results Sync
+
+# Same CRON_SECRET-based trigger as the reminder emails. Harmless to run even
+# if an old cron-job.org job for this already exists elsewhere — grading is
+# idempotent, it just re-checks completed games each time.
+on:
+  schedule:
+    - cron: '0 * * * *' # every hour, on the hour
+  workflow_dispatch: {}
+
+jobs:
+  sync-results:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call results sync endpoint
+        run: |
+          curl -sf -X GET "https://thepredictionsheet.com/api/cron/sync-results" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

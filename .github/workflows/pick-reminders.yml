@@ -1,0 +1,38 @@
+name: Pick'em Email Reminders
+
+# Replaces cron-job.org for the two weekly reminder emails — no third-party
+# account needed, just this repo's own CRON_SECRET action secret.
+on:
+  schedule:
+    - cron: '0 14 * * 3' # Wednesday 14:00 UTC — midweek reminder
+    - cron: '0 14 * * 5' # Friday 14:00 UTC — final reminder
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: 'Which reminder to send when running manually'
+        required: true
+        default: pick-reminder-midweek
+        type: choice
+        options:
+          - pick-reminder-midweek
+          - pick-reminder-final
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pick endpoint for this trigger
+        id: which
+        run: |
+          if [ -n "${{ inputs.endpoint }}" ]; then
+            echo "endpoint=${{ inputs.endpoint }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 14 * * 5" ]; then
+            echo "endpoint=pick-reminder-final" >> "$GITHUB_OUTPUT"
+          else
+            echo "endpoint=pick-reminder-midweek" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Call reminder endpoint
+        run: |
+          curl -sf -X GET "https://thepredictionsheet.com/api/cron/${{ steps.which.outputs.endpoint }}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
