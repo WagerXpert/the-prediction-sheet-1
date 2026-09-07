@@ -1,12 +1,29 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Script from 'next/script'
+import { Poppins } from 'next/font/google'
 import { FAQAccordion } from './FAQAccordion'
+
+// Landing-page-only type system: bold italic Poppins for headlines, matched
+// to a regular-weight Poppins for body copy so the two families read as one system.
+const poppinsHeadline = Poppins({
+  subsets: ['latin'],
+  weight: '900',
+  style: 'italic',
+  variable: '--font-poppins-headline',
+})
+
+const poppinsBody = Poppins({
+  subsets: ['latin'],
+  weight: '400',
+  style: 'normal',
+  variable: '--font-poppins-body',
+})
 
 export const metadata: Metadata = {
   title: 'The Prediction Sheet — CFB Game Picks, Schedule Predictions & CFP Playoff Bracket',
   description:
-    'Predict college football game winners week by week, track your team\'s full schedule, and fill out a 12-team CFP playoff bracket. The #1 CFB prediction platform. Free to play. Powered by WagerXpert.',
+    'Predict college football game winners week by week, track your team\'s full schedule, and fill out a 12-team CFP playoff bracket. The #1 CFB prediction platform. Free to play. Powered by Envizion Sports.',
   alternates: { canonical: '/' },
 }
 
@@ -22,7 +39,7 @@ const structuredData = {
       applicationCategory: 'SportsApplication',
       operatingSystem: 'Any',
       browserRequirements: 'Requires JavaScript. Runs in any modern browser.',
-      author: { '@type': 'Organization', name: 'WagerXpert' },
+      author: { '@type': 'Organization', name: 'Envizion Sports' },
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD', description: 'Free to play' },
       featureList: [
         'Week-by-week CFB game winner picks',
@@ -88,9 +105,9 @@ const structuredData = {
     },
     {
       '@type': 'Organization',
-      name: 'WagerXpert',
+      name: 'Envizion Sports',
       url: 'https://thepredictionsheet.com',
-      description: 'Sports prediction and analytics platform. Creator of The Prediction Sheet CFB picks app.',
+      description: 'Envizion Sports is a sports prediction league — make 5 predictions a week, earn points for every correct call, and compete with friends on a leaderboard. Every prediction builds your Envizion Score, a running credit score for your sports knowledge. Creator of The Prediction Sheet CFB picks app.',
     },
   ],
 }
@@ -102,23 +119,23 @@ export default function LandingPage() {
         {JSON.stringify(structuredData)}
       </Script>
 
-      <main className="min-h-screen bg-white text-black flex flex-col">
+      <main className={`${poppinsHeadline.variable} ${poppinsBody.variable} min-h-screen bg-white text-black flex flex-col`}>
 
         {/* ── Nav ── */}
         <header>
           <nav className="flex items-center justify-between px-6 py-4 bg-black" aria-label="Main navigation">
             <div className="flex items-center gap-3">
               <img
-                src="/WagerXpert guy Logo transparent.png"
-                alt="WagerXpert"
-                className="h-10 w-auto object-contain shrink-0"
+                src="/envizion-sports-logo.png"
+                alt="Envizion Sports"
+                className="h-10 w-auto object-contain shrink-0 rounded-lg"
               />
               <div>
                 <span className="text-lg font-black tracking-tight text-white leading-none block">
                   THE PREDICTION <span className="text-[#84cc16]">SHEET</span>
                 </span>
                 <span className="text-[9px] font-semibold tracking-widest uppercase text-zinc-500 leading-none">
-                  Powered by WagerXpert
+                  Powered by Envizion Sports
                 </span>
               </div>
             </div>
@@ -138,6 +155,12 @@ export default function LandingPage() {
 
         {/* ── Hero ── */}
         <section className="px-6 pt-16 pb-14 max-w-5xl mx-auto w-full" aria-labelledby="hero-heading">
+          <img
+            src="/logo-horizontal.png"
+            alt="The Prediction Sheet"
+            className="h-14 sm:h-16 w-auto object-contain mb-8"
+          />
+
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#84cc16]/40 bg-[#84cc16]/10 mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-[#84cc16] animate-pulse" />
             <span className="text-xs font-bold tracking-widest uppercase text-[#65a30d]">
@@ -147,14 +170,14 @@ export default function LandingPage() {
 
           <h1
             id="hero-heading"
-            className="text-5xl sm:text-7xl font-black leading-none tracking-tight mb-5 uppercase"
+            className="font-[family-name:var(--font-poppins-headline)] italic text-5xl sm:text-7xl font-black leading-none tracking-tight mb-5 uppercase"
           >
             Predict Every<br />
             College Football<br />
             <span className="text-[#84cc16]">Game.</span>
           </h1>
 
-          <p className="text-zinc-500 text-lg max-w-lg mb-8 leading-relaxed">
+          <p className="font-[family-name:var(--font-poppins-body)] text-zinc-500 text-lg max-w-lg mb-8 leading-relaxed">
             Four prediction modes. 900+ games. Free to play.<br className="hidden sm:block" />
             Find out exactly how sharp your CFB picks really are.
           </p>
@@ -208,7 +231,7 @@ export default function LandingPage() {
           <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-2">
             Four Prediction Modes
           </p>
-          <h2 id="modes-heading" className="text-3xl font-black uppercase mb-10">
+          <h2 id="modes-heading" className="font-[family-name:var(--font-poppins-headline)] italic text-3xl font-black uppercase mb-10">
             Every Way to Predict CFB
           </h2>
 
@@ -223,7 +246,7 @@ export default function LandingPage() {
                 </span>
               </div>
               <h3 id="mode-fullseason" className="text-lg font-black uppercase mb-2">Full Season Mode</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed flex-1 mb-5">
+              <p className="font-[family-name:var(--font-poppins-body)] text-zinc-400 text-sm leading-relaxed flex-1 mb-5">
                 Pick every game for your selected conferences. Conference standings, championships,
                 and your CFP bracket all build automatically from your picks.
               </p>
@@ -244,7 +267,7 @@ export default function LandingPage() {
                 </span>
               </div>
               <h3 id="mode-pickem" className="text-lg font-black uppercase mb-2">Weekly Pick'em</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed flex-1 mb-5">
+              <p className="font-[family-name:var(--font-poppins-body)] text-zinc-400 text-sm leading-relaxed flex-1 mb-5">
                 Pick the winner of every CFB game each week. No season commitment required —
                 jump in any week, climb the leaderboard, and see how you stack up.
               </p>
@@ -260,7 +283,7 @@ export default function LandingPage() {
             <article className="rounded-2xl border border-zinc-200 p-6 flex flex-col" aria-labelledby="mode-tracker">
               <span className="text-3xl font-black text-[#84cc16] mb-4">03</span>
               <h3 id="mode-tracker" className="text-lg font-black uppercase mb-2">Team Season Tracker</h3>
-              <p className="text-zinc-500 text-sm leading-relaxed flex-1 mb-5">
+              <p className="font-[family-name:var(--font-poppins-body)] text-zinc-500 text-sm leading-relaxed flex-1 mb-5">
                 Lock in on any FBS team. Predict every game on their schedule and see your
                 accuracy update in real time as results come in.
               </p>
@@ -276,7 +299,7 @@ export default function LandingPage() {
             <article className="rounded-2xl border border-zinc-200 p-6 flex flex-col" aria-labelledby="mode-cfp">
               <span className="text-3xl font-black text-[#84cc16] mb-4">04</span>
               <h3 id="mode-cfp" className="text-lg font-black uppercase mb-2">CFP Playoff Bracket</h3>
-              <p className="text-zinc-500 text-sm leading-relaxed flex-1 mb-5">
+              <p className="font-[family-name:var(--font-poppins-body)] text-zinc-500 text-sm leading-relaxed flex-1 mb-5">
                 Build the full 12-team College Football Playoff bracket. Run a simulation or
                 pick teams manually, then call every game through the championship.
               </p>
@@ -295,7 +318,7 @@ export default function LandingPage() {
         <div className="bg-zinc-50 border-y border-zinc-100">
           <div className="px-6 py-14 max-w-5xl mx-auto">
             <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-2">Simple to Start</p>
-            <h2 className="text-3xl font-black uppercase mb-10">How it Works</h2>
+            <h2 className="font-[family-name:var(--font-poppins-headline)] italic text-3xl font-black uppercase mb-10">How it Works</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {[
                 { n: '1', title: 'Create a Free Account', desc: 'Sign up in 30 seconds. No credit card.' },
@@ -304,11 +327,9 @@ export default function LandingPage() {
                 { n: '4', title: 'Track Your Accuracy',    desc: 'Your correct pick % updates in real time as games are played.' },
               ].map(({ n, title, desc }) => (
                 <div key={n}>
-                  <div className="w-9 h-9 rounded-full bg-[#84cc16] text-black flex items-center justify-center font-black text-sm mb-3">
-                    {n}
-                  </div>
+                  <div className="text-3xl font-black text-[#84cc16] mb-3">{n}</div>
                   <h3 className="font-black text-sm uppercase mb-1.5">{title}</h3>
-                  <p className="text-sm text-zinc-500 leading-relaxed">{desc}</p>
+                  <p className="font-[family-name:var(--font-poppins-body)] text-sm text-zinc-500 leading-relaxed">{desc}</p>
                 </div>
               ))}
             </div>
@@ -318,34 +339,35 @@ export default function LandingPage() {
         {/* ── FAQ ── */}
         <section className="px-6 py-14 max-w-3xl mx-auto w-full" aria-labelledby="faq-heading">
           <p className="text-xs font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-2">Got Questions?</p>
-          <h2 id="faq-heading" className="text-3xl font-black uppercase mb-10">Common Questions</h2>
+          <h2 id="faq-heading" className="font-[family-name:var(--font-poppins-headline)] italic text-3xl font-black uppercase mb-10">Common Questions</h2>
           <FAQAccordion />
         </section>
 
-        {/* ── WagerXpert callout ── */}
-        <section className="px-6 pb-10 max-w-5xl mx-auto w-full" aria-label="WagerXpert">
+        {/* ── Envizion Sports callout ── */}
+        <section className="px-6 pb-10 max-w-5xl mx-auto w-full" aria-label="Envizion Sports">
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-7 py-7 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <img
+              src="/envizion-sports-logo.png"
+              alt="Envizion Sports"
+              className="h-14 w-14 object-contain shrink-0 rounded-xl"
+            />
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#65a30d] mb-1">
                 From the creators of The Prediction Sheet
               </p>
-              <h2 className="text-xl font-black uppercase mb-1.5">
-                WagerXpert — All The Thrill, None Of The Pressure
+              <h2 className="font-[family-name:var(--font-poppins-headline)] italic text-xl font-black uppercase mb-1.5">
+                Envizion Sports — Prove Your Sports IQ
               </h2>
-              <p className="text-sm text-zinc-500 leading-relaxed max-w-xl">
-                Love making picks? Take your skills to WagerXpert — weekly parlay competitions
-                across NFL, NBA, NCAAF, and more. Build parlays using real odds, compete on
-                leaderboards, and play with friends. No cash on the line, no house edge.
+              <p className="font-[family-name:var(--font-poppins-body)] text-sm text-zinc-500 leading-relaxed max-w-xl">
+                A sports prediction league built for bragging rights. Make 5 predictions a week,
+                earn points for every one you get right, and climb the leaderboard against your
+                friends. Every pick also builds your Envizion Score — a running credit score for
+                how sharp your sports knowledge really is.
               </p>
             </div>
-            <a
-              href="https://wagerxpert.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 px-6 py-3 bg-black text-white font-black text-sm tracking-wide uppercase rounded-xl hover:bg-zinc-800 transition-colors whitespace-nowrap"
-            >
-              Try WagerXpert →
-            </a>
+            <span className="shrink-0 px-6 py-3 border-2 border-black text-black font-black text-sm tracking-wide uppercase rounded-xl whitespace-nowrap">
+              Coming Soon
+            </span>
           </div>
         </section>
 
@@ -355,16 +377,16 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-8 pb-8 border-b border-zinc-800">
               <div className="flex items-center gap-3">
                 <img
-                  src="/WagerXpert guy Logo transparent.png"
-                  alt="WagerXpert"
-                  className="h-10 w-auto object-contain shrink-0"
+                  src="/envizion-sports-logo.png"
+                  alt="Envizion Sports"
+                  className="h-10 w-auto object-contain shrink-0 rounded-lg"
                 />
                 <div>
                   <p className="text-base font-black tracking-tight text-white leading-none">
                     THE PREDICTION <span className="text-[#84cc16]">SHEET</span>
                   </p>
                   <p className="text-[9px] font-semibold tracking-widest uppercase text-zinc-500 mt-0.5">
-                    Powered by WagerXpert
+                    Powered by Envizion Sports
                   </p>
                 </div>
               </div>
@@ -373,19 +395,11 @@ export default function LandingPage() {
                 <Link href="/login"       className="hover:text-white transition-colors">Sign In</Link>
                 <Link href="/cfb"         className="hover:text-white transition-colors">CFB Hub</Link>
                 <Link href="/leaderboard" className="hover:text-white transition-colors">Leaderboard</Link>
-                <a
-                  href="https://wagerxpert.app/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-[#84cc16] transition-colors"
-                >
-                  WagerXpert ↗
-                </a>
               </nav>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <p className="text-xs text-zinc-500">
-                © {new Date().getFullYear()} The Prediction Sheet · Powered by WagerXpert · All rights reserved.
+                © {new Date().getFullYear()} The Prediction Sheet · Powered by Envizion Sports · All rights reserved.
               </p>
               <p className="text-xs text-zinc-600">
                 CFB game picks · Schedule predictions · CFP bracket builder

@@ -16,7 +16,7 @@ export default async function ProfilePage() {
   const [{ data: profile }, { data: teams }] = await Promise.all([
     supabase
       .from('profiles')
-      .select('display_name, username, bio, favorite_team_id')
+      .select('display_name, username, bio, favorite_team_id, email_reminders_opt_in')
       .eq('id', user.id)
       .single(),
     supabase
@@ -41,6 +41,7 @@ export default async function ProfilePage() {
           username: profile?.username ?? '',
           bio: profile?.bio ?? '',
           favoriteTeamId: profile?.favorite_team_id ?? null,
+          emailRemindersOptIn: profile?.email_reminders_opt_in ?? true,
         }}
         teams={teams ?? []}
       />

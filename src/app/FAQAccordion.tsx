@@ -74,7 +74,7 @@ export function FAQAccordion() {
             className="grid transition-all duration-300 ease-in-out"
           >
             <div className="overflow-hidden">
-              <p className="pb-5 text-sm text-zinc-500 leading-relaxed pr-10">{a}</p>
+              <p className="font-[family-name:var(--font-poppins-body)] pb-5 text-sm text-zinc-500 leading-relaxed pr-10">{a}</p>
             </div>
           </div>
         </div>

@@ -17,6 +17,7 @@ interface Props {
     username: string
     bio: string
     favoriteTeamId: string | null
+    emailRemindersOptIn: boolean
   }
   teams: Team[]
 }
@@ -28,6 +29,7 @@ export default function ProfileForm({ userId, email, initial, teams }: Props) {
   const [username, setUsername] = useState(initial.username)
   const [bio, setBio] = useState(initial.bio)
   const [favoriteTeamId, setFavoriteTeamId] = useState(initial.favoriteTeamId ?? '')
+  const [emailRemindersOptIn, setEmailRemindersOptIn] = useState(initial.emailRemindersOptIn)
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -52,6 +54,7 @@ export default function ProfileForm({ userId, email, initial, teams }: Props) {
           username: username.trim() || null,
           bio: bio.trim() || null,
           favorite_team_id: favoriteTeamId || null,
+          email_reminders_opt_in: emailRemindersOptIn,
         })
         .eq('id', userId)
 
@@ -139,6 +142,18 @@ export default function ProfileForm({ userId, email, initial, teams }: Props) {
             className={`${inputCls} bg-zinc-50 text-zinc-400 cursor-not-allowed`}
           />
           <p className="text-xs text-zinc-400 mt-1">Email cannot be changed here.</p>
+        </Field>
+
+        <Field label="Pick'em Emails">
+          <label className="flex items-center gap-2.5 text-sm font-medium text-zinc-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={emailRemindersOptIn}
+              onChange={(e) => setEmailRemindersOptIn(e.target.checked)}
+              className="w-4 h-4 rounded accent-[#84cc16]"
+            />
+            Send me pick reminders and weekly results emails
+          </label>
         </Field>
       </div>
 

@@ -132,10 +132,13 @@ export interface Database {
           bio: string | null
           favorite_team_id: string | null
           is_admin: boolean
+          email_reminders_opt_in: boolean
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'updated_at'>
+        Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'updated_at' | 'email_reminders_opt_in'> & {
+          email_reminders_opt_in?: boolean
+        }
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>
         Relationships: [
           {
@@ -462,6 +465,26 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: 'sync_log_sport_id_fkey'
+            columns: ['sport_id']
+            isOneToOne: false
+            referencedRelation: 'sports'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      week_notifications: {
+        Row: {
+          id: string
+          sport_id: string
+          season: number
+          week: number
+          notified_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['week_notifications']['Row'], 'id' | 'notified_at'>
+        Update: Partial<Database['public']['Tables']['week_notifications']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'week_notifications_sport_id_fkey'
             columns: ['sport_id']
             isOneToOne: false
             referencedRelation: 'sports'

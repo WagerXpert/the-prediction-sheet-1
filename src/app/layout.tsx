@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 const geistSans = Geist({
@@ -14,30 +15,30 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'The Prediction Sheet — CFB Predictions & CFP Bracket | Powered by WagerXpert',
+    default: 'The Prediction Sheet — CFB Predictions & CFP Bracket | Powered by Envizion Sports',
     template: '%s | The Prediction Sheet',
   },
   description:
-    'The #1 college football prediction platform. Pick CFB game winners week by week, predict team schedules, and fill out your 12-team CFP playoff bracket. Free to play. Powered by WagerXpert.',
+    'The #1 college football prediction platform. Pick CFB game winners week by week, predict team schedules, and fill out your 12-team CFP playoff bracket. Free to play. Powered by Envizion Sports.',
   keywords: [
     'CFB predictions', 'college football picks', 'CFP bracket predictions', 'CFP playoff bracket 2026',
     'college football game picks', 'CFB schedule predictions', 'football prediction sheet',
     'college football bracket', 'CFB playoff bracket', 'weekly CFB picks',
-    'college football season predictions', 'CFB accuracy tracker', 'WagerXpert',
+    'college football season predictions', 'CFB accuracy tracker', 'Envizion Sports',
     'pick college football games', 'predict CFB schedule', 'college football prediction contest',
     'FBS game predictions', 'college football playoff predictions',
   ],
   openGraph: {
     title: 'The Prediction Sheet — CFB Predictions & CFP Bracket',
-    description: 'Predict college football game winners week by week, track your team\'s schedule, and build your 12-team CFP playoff bracket. Free to play. Powered by WagerXpert.',
+    description: 'Predict college football game winners week by week, track your team\'s schedule, and build your 12-team CFP playoff bracket. Free to play. Powered by Envizion Sports.',
     type: 'website',
-    siteName: 'The Prediction Sheet by WagerXpert',
+    siteName: 'The Prediction Sheet by Envizion Sports',
     images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'The Prediction Sheet — CFB Predictions' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'The Prediction Sheet — CFB Predictions & CFP Bracket',
-    description: 'Pick CFB game winners, predict team schedules, and fill out your CFP playoff bracket. Powered by WagerXpert.',
+    description: 'Pick CFB game winners, predict team schedules, and fill out your CFP playoff bracket. Powered by Envizion Sports.',
   },
   robots: {
     index: true,
@@ -62,6 +63,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
+        <Analytics />
       </body>
     </html>
   )

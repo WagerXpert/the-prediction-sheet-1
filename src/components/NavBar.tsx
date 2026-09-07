@@ -23,8 +23,12 @@ export default async function NavBar() {
 
   return (
     <nav className="sticky top-0 z-40 relative flex items-center justify-between px-6 py-4 bg-white border-b border-zinc-200">
-      <Link href={user ? '/dashboard' : '/'} className="text-xl font-black tracking-tight">
-        THE PREDICTION <span className="text-[#84cc16]">SHEET</span>
+      <Link href={user ? '/dashboard' : '/'} className="shrink-0">
+        <img
+          src="/logo-horizontal.png"
+          alt="The Prediction Sheet"
+          className="h-8 w-auto object-contain"
+        />
       </Link>
 
       {user ? (

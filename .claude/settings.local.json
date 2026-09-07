@@ -26,7 +26,31 @@
       "Bash(Start-Sleep -Seconds 4)",
       "Bash(Get-Content \"C:\\\\Users\\\\braun\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-braun-OneDrive-Desktop-The-Prediction-Sheet\\\\8dfb9a22-35bf-4203-b756-3ab598fc6823\\\\tasks\\\\b0z1voov1.output\")",
       "Bash(Select-Object -Last 15)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(findstr -i \"wager\")",
+      "WebFetch(domain:wagerxpert.app)",
+      "Bash(awk '{print $1/2}')",
+      "Bash(xargs grep -l \"game\\\\|pick\")",
+      "PowerShell(cd \"C:\\\\Users\\\\braun\\\\OneDrive\\\\Desktop\\\\The Prediction Sheet\"; git add src/app/globals.css src/components/auth/LoginForm.tsx src/components/cfb/GamePicksForm.tsx src/components/cfb/SchedulePicksForm.tsx src/lib/data/cfb.ts src/components/OnboardingModal.tsx src/components/SessionGuard.tsx src/components/ShareButton.tsx src/app/\\(app\\)/dashboard/page.tsx src/app/\\(app\\)/layout.tsx \"src/app/\\(app\\)/cfb/full-season/team/[teamId]/TeamScheduleClient.tsx\" \"src/app/\\(app\\)/cfb/team-tracker/[teamId]/TeamTrackerClient.tsx\")",
+      "Bash(xargs ls -lh)",
+      "PowerShell(git add *)",
+      "PowerShell(git commit -m $msg)",
+      "PowerShell($msg = \"Week fixes, AP rankings, 2025 records, team records in picks, conference standings page`n`nWeek 0 boundary fix: Week 0 = before 9/1, Week 1 = 9/1-9/6, Week 2+ starts on Monday. AP Top 25 rankings via CFBD: rankings table, Monday cron \\(Aug 25 - Jan 25\\), admin panel sync button, rank badges in Full Season grid and pick buttons. 2025 season record in Full Season team header. Conference logo links to new conference standings page. Team W-L records in pick buttons across all modes - reactive via useMemo in Full Season.`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")",
+      "PowerShell(git push *)",
+      "PowerShell(Receive-Job *)",
+      "PowerShell(taskkill *)",
+      "PowerShell(git pull *)",
+      "PowerShell(git *)",
+      "Read(//c/Users/braun/OneDrive/Desktop/**)",
+      "Read(//c/Users/braun/**)",
+      "Bash(npx eslint *)",
+      "Bash(pkill -f \"next dev\")",
+      "Skill(run)",
+      "Bash(disown)",
+      "Bash(powershell -NoProfile -Command \"Get-CimInstance Win32_Process -Filter \\\\\"name='node.exe'\\\\\" | Select-Object ProcessId, CommandLine | Format-List\")",
+      "Bash(wmic process *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(Get-Process *)"
     ]
   }
 }
