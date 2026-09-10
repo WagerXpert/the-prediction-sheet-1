@@ -14,5 +14,5 @@ jobs:
     steps:
       - name: Call results sync endpoint
         run: |
-          curl -sf -X GET "https://thepredictionsheet.com/api/cron/sync-results" \
+          curl -sf -X GET "https://www.thepredictionsheet.com/api/cron/sync-results" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

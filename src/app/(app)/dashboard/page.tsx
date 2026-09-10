@@ -68,7 +68,7 @@ export default async function DashboardPage() {
   const weeklyPickCount = weeklyPicksRes.count ?? 0
   const hasAnyPredictions = !!fsSession || trackerTeamIds.length > 0 || !!playoffBracket || weeklyPickCount > 0
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://thepredictionsheet.com'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.thepredictionsheet.com'
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">

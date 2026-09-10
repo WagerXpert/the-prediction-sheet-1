@@ -23,5 +23,7 @@ export type SendEmailArgs = {
 
 export async function sendEmail({ to, subject, html, text }: SendEmailArgs) {
   const resend = getResendClient()
-  return resend.emails.send({ from: EMAIL_FROM, to, subject, html, text })
+  const { data, error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html, text })
+  if (error) throw new Error(`Resend error: ${error.name} — ${error.message}`)
+  return data
 }

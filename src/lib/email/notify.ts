@@ -1,10 +1,12 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { CURRENT_SEASON, GAME_STATUS } from '@/lib/utils/constants'
 import { sendEmail } from './client'
+import { assertSafeToBlast } from './layout'
 import { reminderWednesdayEmail } from './templates/reminderWednesday'
 import { reminderFridayEmail } from './templates/reminderFriday'
 import { resultsSettledEmail } from './templates/resultsSettled'
 import { envizionAnnouncementEmail } from './templates/envizionAnnouncement'
+import { siteUpdateAnnouncementEmail } from './templates/siteUpdateAnnouncement'
 
 type Db = ReturnType<typeof createServiceClient>
 
@@ -106,6 +108,7 @@ export type ReminderResult = { sent: number; week: number | null }
 
 /** Wednesday/Friday nudge — emails everyone opted in who hasn't finished the open week. */
 export async function sendPickReminders(variant: 'wednesday' | 'friday'): Promise<ReminderResult> {
+  assertSafeToBlast()
   const db = createServiceClient()
 
   const { data: openWeekRows } = await db
@@ -164,6 +167,7 @@ export type SettledResult = { weeksNotified: number[]; sent: number }
  * Safe to call every time the results sync runs — idempotent per week.
  */
 export async function sendSettledWeekResults(): Promise<SettledResult> {
+  assertSafeToBlast()
   const db = createServiceClient()
 
   const { data: allGames } = await db
@@ -265,10 +269,37 @@ export async function sendEnvizionAnnouncement(ctaUrl: string, testEmail?: strin
     return { sent: 1 }
   }
 
+  assertSafeToBlast()
   const recipients = await getOptedInRecipients(db)
   let sent = 0
   for (const recipient of recipients) {
     const { subject, html, text } = envizionAnnouncementEmail({ name: recipient.name, ctaUrl })
+    await sendEmail({ to: recipient.email, subject, html, text })
+    sent++
+  }
+
+  return { sent }
+}
+
+/**
+ * One-time promo — tells the existing user base about the site redesign.
+ * Trigger manually via /api/admin/send-site-update-announcement. Pass
+ * testEmail to send a single preview copy before blasting the full list.
+ */
+export async function sendSiteUpdateAnnouncement(testEmail?: string): Promise<{ sent: number }> {
+  const db = createServiceClient()
+
+  if (testEmail) {
+    const { subject, html, text } = siteUpdateAnnouncementEmail({ name: 'there' })
+    await sendEmail({ to: testEmail, subject, html, text })
+    return { sent: 1 }
+  }
+
+  assertSafeToBlast()
+  const recipients = await getOptedInRecipients(db)
+  let sent = 0
+  for (const recipient of recipients) {
+    const { subject, html, text } = siteUpdateAnnouncementEmail({ name: recipient.name })
     await sendEmail({ to: recipient.email, subject, html, text })
     sent++
   }

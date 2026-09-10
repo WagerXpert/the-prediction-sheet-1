@@ -33,7 +33,7 @@ const structuredData = {
     {
       '@type': 'WebApplication',
       name: 'The Prediction Sheet',
-      url: 'https://thepredictionsheet.com',
+      url: 'https://www.thepredictionsheet.com',
       description:
         'College football prediction platform offering week-by-week CFB game picks, full team schedule predictions, and 12-team CFP playoff bracket forecasting.',
       applicationCategory: 'SportsApplication',
@@ -106,7 +106,7 @@ const structuredData = {
     {
       '@type': 'Organization',
       name: 'Envizion Sports',
-      url: 'https://thepredictionsheet.com',
+      url: 'https://www.thepredictionsheet.com',
       description: 'Envizion Sports is a sports prediction league — make 5 predictions a week, earn points for every correct call, and compete with friends on a leaderboard. Every prediction builds your Envizion Score, a running credit score for your sports knowledge. Creator of The Prediction Sheet CFB picks app.',
     },
   ],

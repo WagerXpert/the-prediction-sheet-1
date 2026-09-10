@@ -34,5 +34,5 @@ jobs:
 
       - name: Call reminder endpoint
         run: |
-          curl -sf -X GET "https://thepredictionsheet.com/api/cron/${{ steps.which.outputs.endpoint }}" \
+          curl -sf -X GET "https://www.thepredictionsheet.com/api/cron/${{ steps.which.outputs.endpoint }}" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

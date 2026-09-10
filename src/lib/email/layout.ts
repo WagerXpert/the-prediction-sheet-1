@@ -1,6 +1,6 @@
 import { BRAND } from '@/lib/utils/constants'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://thepredictionsheet.com'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.thepredictionsheet.com'
 
 export type EmailShellArgs = {
   preheader: string
@@ -70,3 +70,17 @@ export function ctaButtonHtml(label: string, url: string): string {
 }
 
 export { APP_URL }
+
+/**
+ * Guards against blasting real recipients with broken localhost links —
+ * throws if NEXT_PUBLIC_APP_URL resolves to a local dev address. Call this
+ * before any send loop that emails more than a single test recipient.
+ */
+export function assertSafeToBlast() {
+  if (/localhost|127\.0\.0\.1/.test(APP_URL)) {
+    throw new Error(
+      `Refusing to send to real recipients: NEXT_PUBLIC_APP_URL is "${APP_URL}". ` +
+        `Run this against the deployed site (or set NEXT_PUBLIC_APP_URL to the production URL) before sending.`
+    )
+  }
+}
