@@ -324,6 +324,25 @@ export async function syncSchedule(season = CURRENT_SEASON): Promise<SyncResult>
 // Sync: game results for a specific week (or full season) + grade predictions
 // ---------------------------------------------------------------------------
 
+/**
+ * Lowest week (this season) that still has an unfinished game — the week an
+ * hourly sync actually needs to check, instead of re-scanning/re-grading the
+ * whole season every run. Same "open week" definition used for pick reminders.
+ */
+export async function getCurrentSyncWeek(db: ReturnType<typeof createServiceClient>, season = CURRENT_SEASON): Promise<number | null> {
+  const { data } = await db
+    .from('games')
+    .select('week')
+    .eq('sport_id', 'cfb')
+    .eq('season', season)
+    .not('week', 'is', null)
+    .neq('status', GAME_STATUS.COMPLETED)
+    .order('week')
+    .limit(1)
+
+  return data?.[0]?.week ?? null
+}
+
 export async function syncResults(season = CURRENT_SEASON, week?: number): Promise<SyncResult> {
   const t0 = Date.now()
   const db = createServiceClient()
@@ -350,26 +369,28 @@ export async function syncResults(season = CURRENT_SEASON, week?: number): Promi
       ourGames?.filter(g => g.external_id != null).map(g => [String(g.external_id!), g.id]) ?? []
     )
 
-    let updatedGames = 0
-    for (const g of completedGames) {
-      const ourId = gameByExtId.get(String(g.id))
-      if (!ourId) continue
-      await db.from('games').update({
-        home_team_points: g.homePoints,
-        away_team_points: g.awayPoints,
-        status: GAME_STATUS.COMPLETED,
-      }).eq('id', ourId)
-      updatedGames++
-    }
+    const gamesToUpdate = completedGames
+      .map(g => ({ ourId: gameByExtId.get(String(g.id)), g }))
+      .filter(x => x.ourId != null) as { ourId: string; g: typeof completedGames[number] }[]
+
+    await Promise.all(
+      gamesToUpdate.map(({ ourId, g }) =>
+        db.from('games').update({
+          home_team_points: g.homePoints,
+          away_team_points: g.awayPoints,
+          status: GAME_STATUS.COMPLETED,
+        }).eq('id', ourId)
+      )
+    )
+    const updatedGames = gamesToUpdate.length
 
     // Grade game pick predictions
     await gradeGamePicks(db, season, week)
 
-    // Grade season record + standings predictions only on full-season sync
-    if (!week) {
-      await gradePredictionRecords(db, season)
-      await gradePredictionStandings(db, season)
-    }
+    // Record + standings grading is cheap (parallelized, season-wide but
+    // small row counts) — run it every sync so those stay live too.
+    await gradePredictionRecords(db, season)
+    await gradePredictionStandings(db, season)
 
     const syncType = week ? `results_week_${week}` : 'results_season'
     await db.from('sync_log').insert({
@@ -421,8 +442,8 @@ async function gradeGamePicks(db: ReturnType<typeof createServiceClient>, season
   const { data: games } = await query
   if (!games?.length) return
 
-  for (const game of games) {
-    if (game.home_team_points === null || game.away_team_points === null) continue
+  await Promise.all(games.map(async game => {
+    if (game.home_team_points === null || game.away_team_points === null) return
     const winnerId =
       game.home_team_points > game.away_team_points ? game.home_team_id : game.away_team_id
 
@@ -432,16 +453,16 @@ async function gradeGamePicks(db: ReturnType<typeof createServiceClient>, season
       .select('id, picked_team_id')
       .eq('game_id', game.id)
 
-    if (!picks?.length) continue
+    if (!picks?.length) return
 
-    for (const pick of picks) {
+    await Promise.all(picks.map(pick => {
       const isCorrect = pick.picked_team_id === winnerId
-      await db.from('predictions_game').update({
+      return db.from('predictions_game').update({
         is_correct: isCorrect,
         points_awarded: isCorrect ? 1 : 0,
       }).eq('id', pick.id)
-    }
-  }
+    }))
+  }))
 }
 
 async function gradePredictionRecords(db: ReturnType<typeof createServiceClient>, season: number) {
@@ -474,19 +495,19 @@ async function gradePredictionRecords(db: ReturnType<typeof createServiceClient>
 
   if (!preds?.length) return
 
-  for (const pred of preds) {
+  await Promise.all(preds.map(pred => {
     const actualWins = wins[pred.team_id] ?? 0
     const actualLosses = losses[pred.team_id] ?? 0
     const diff = Math.abs(pred.predicted_wins - actualWins)
     // Scoring: exact = 3pts, off by 1 = 1pt, else 0
     const points = diff === 0 ? 3 : diff === 1 ? 1 : 0
-    await db.from('predictions_record').update({
+    return db.from('predictions_record').update({
       actual_wins: actualWins,
       actual_losses: actualLosses,
       is_correct: diff === 0,
       points_awarded: points,
     }).eq('id', pred.id)
-  }
+  }))
 }
 
 async function gradePredictionStandings(db: ReturnType<typeof createServiceClient>, season: number) {
@@ -536,17 +557,17 @@ async function gradePredictionStandings(db: ReturnType<typeof createServiceClien
 
   if (!preds?.length) return
 
-  for (const pred of preds) {
+  await Promise.all(preds.map(pred => {
     const actualRank = actualRankByTeam[pred.team_id] ?? null
-    if (actualRank === null) continue
+    if (actualRank === null) return null
     const diff = Math.abs(pred.predicted_rank - actualRank)
     // Scoring: exact = 3pts, off by 1 = 1pt, else 0
     const points = diff === 0 ? 3 : diff === 1 ? 1 : 0
-    await db.from('predictions_standings').update({
+    return db.from('predictions_standings').update({
       actual_rank: actualRank,
       points_awarded: points,
     }).eq('id', pred.id)
-  }
+  }))
 }
 
 // ---------------------------------------------------------------------------
