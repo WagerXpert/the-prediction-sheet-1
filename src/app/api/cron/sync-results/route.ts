@@ -26,7 +26,15 @@ export async function GET(req: Request) {
 
   // Once grading is done, email anyone whose week just fully settled.
   // Idempotent — safe even if this fires every hour with nothing new.
-  const notifications = result.ok ? await sendSettledWeekResults() : { weeksNotified: [], sent: 0 }
+  // Wrapped: an email/notification failure shouldn't turn an otherwise-successful
+  // sync into an opaque crashed request (see sync_log for the actual sync outcome).
+  let notifications: Awaited<ReturnType<typeof sendSettledWeekResults>> | { weeksNotified: number[]; sent: number; error: string }
+  try {
+    notifications = result.ok ? await sendSettledWeekResults() : { weeksNotified: [], sent: 0 }
+  } catch (err: any) {
+    console.error('[cron/sync-results] sendSettledWeekResults failed:', err)
+    notifications = { weeksNotified: [], sent: 0, error: String(err?.message ?? err) }
+  }
 
   return NextResponse.json({ ...result, notifications }, { status: result.ok ? 200 : 500 })
 }

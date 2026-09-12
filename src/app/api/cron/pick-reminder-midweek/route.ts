@@ -9,6 +9,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const result = await sendPickReminders('wednesday')
-  return NextResponse.json(result)
+  try {
+    const result = await sendPickReminders('wednesday')
+    return NextResponse.json(result)
+  } catch (err: any) {
+    console.error('[cron/pick-reminder-midweek] sendPickReminders failed:', err)
+    return NextResponse.json({ error: String(err?.message ?? err) }, { status: 500 })
+  }
 }

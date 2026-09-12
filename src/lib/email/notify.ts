@@ -152,8 +152,14 @@ export async function sendPickReminders(variant: 'wednesday' | 'friday'): Promis
     if (unpickedCount <= 0) continue
 
     const { subject, html, text } = build({ name: recipient.name, week: openWeek, unpickedCount })
-    await sendEmail({ to: recipient.email, subject, html, text })
-    sent++
+    try {
+      await sendEmail({ to: recipient.email, subject, html, text })
+      sent++
+    } catch (err) {
+      // One bad send (Resend rejection, bad address, etc.) shouldn't take down
+      // the whole cron run — log it and keep emailing the rest of the list.
+      console.error(`[sendPickReminders] failed to email ${recipient.email}:`, err)
+    }
   }
 
   return { sent, week: openWeek }
@@ -241,8 +247,14 @@ export async function sendSettledWeekResults(): Promise<SettledResult> {
             seasonPoints: seasonPoints.get(userId) ?? 0,
             rank: ranks.get(userId),
           })
-          await sendEmail({ to: recipient.email, subject, html, text })
-          totalSent++
+          try {
+            await sendEmail({ to: recipient.email, subject, html, text })
+            totalSent++
+          } catch (err) {
+            // Same reasoning as sendPickReminders — don't let one failed send
+            // abort the loop (and, further up, crash the whole cron request).
+            console.error(`[sendSettledWeekResults] failed to email ${recipient.email}:`, err)
+          }
         }
       }
     }
