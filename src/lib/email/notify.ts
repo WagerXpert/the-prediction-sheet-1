@@ -12,6 +12,62 @@ type Db = ReturnType<typeof createServiceClient>
 
 type Recipient = { id: string; name: string; email: string }
 
+type ConferenceJoinRow = {
+  home_team: { conference_id: string | null } | null
+  away_team: { conference_id: string | null } | null
+}
+
+/**
+ * True for games between two FBS teams — the same definition
+ * getCfbGamesByWeek/getOpenWeek use to decide what's actually a pickable
+ * game. CFBD's schedule endpoint isn't classification-filtered, so
+ * lower-division matchups occasionally land in the games table and may
+ * never flip to "completed"; excluding them keeps open/settled-week math
+ * from getting stuck on a game nobody can ever pick.
+ */
+function isFbsMatchup(g: ConferenceJoinRow): boolean {
+  return g.home_team?.conference_id != null && g.away_team?.conference_id != null
+}
+
+/** Same "open week" definition as getOpenWeek() in lib/data/cfb.ts, against the service-role client the cron jobs use. */
+async function getOpenWeekForNotify(db: Db): Promise<number | null> {
+  const { data } = await db
+    .from('games')
+    .select(
+      `week,
+       home_team:teams!games_home_team_id_fkey(conference_id),
+       away_team:teams!games_away_team_id_fkey(conference_id)`
+    )
+    .eq('sport_id', 'cfb')
+    .eq('season', CURRENT_SEASON)
+    .not('week', 'is', null)
+    .neq('status', GAME_STATUS.COMPLETED)
+    .order('week')
+
+  if (!data?.length) return null
+  const row = (data as unknown as (ConferenceJoinRow & { week: number })[]).find(isFbsMatchup)
+  return row?.week ?? null
+}
+
+/** Ids of the pickable (FBS) games in a week that aren't completed yet. */
+async function getPickableOpenGameIds(db: Db, week: number): Promise<string[]> {
+  const { data } = await db
+    .from('games')
+    .select(
+      `id,
+       home_team:teams!games_home_team_id_fkey(conference_id),
+       away_team:teams!games_away_team_id_fkey(conference_id)`
+    )
+    .eq('sport_id', 'cfb')
+    .eq('season', CURRENT_SEASON)
+    .eq('week', week)
+    .neq('status', GAME_STATUS.COMPLETED)
+
+  return ((data as unknown as (ConferenceJoinRow & { id: string })[]) ?? [])
+    .filter(isFbsMatchup)
+    .map((g) => g.id)
+}
+
 /** All auth users, id -> email. Paginates in case the user base outgrows one page. */
 async function getEmailMap(db: Db, ids: string[]): Promise<Map<string, string>> {
   const wanted = new Set(ids)
@@ -111,28 +167,10 @@ export async function sendPickReminders(variant: 'wednesday' | 'friday'): Promis
   assertSafeToBlast()
   const db = createServiceClient()
 
-  const { data: openWeekRows } = await db
-    .from('games')
-    .select('week')
-    .eq('sport_id', 'cfb')
-    .eq('season', CURRENT_SEASON)
-    .not('week', 'is', null)
-    .neq('status', GAME_STATUS.COMPLETED)
-    .order('week')
-    .limit(1)
-
-  const openWeek = openWeekRows?.[0]?.week ?? null
+  const openWeek = await getOpenWeekForNotify(db)
   if (openWeek === null) return { sent: 0, week: null }
 
-  const { data: weekGames } = await db
-    .from('games')
-    .select('id')
-    .eq('sport_id', 'cfb')
-    .eq('season', CURRENT_SEASON)
-    .eq('week', openWeek)
-    .neq('status', GAME_STATUS.COMPLETED)
-
-  const gameIds = (weekGames ?? []).map((g) => g.id)
+  const gameIds = await getPickableOpenGameIds(db, openWeek)
   if (!gameIds.length) return { sent: 0, week: openWeek }
 
   const recipients = await getOptedInRecipients(db)
@@ -178,16 +216,26 @@ export async function sendSettledWeekResults(): Promise<SettledResult> {
 
   const { data: allGames } = await db
     .from('games')
-    .select('week, status')
+    .select(
+      `week, status,
+       home_team:teams!games_home_team_id_fkey(conference_id),
+       away_team:teams!games_away_team_id_fkey(conference_id)`
+    )
     .eq('sport_id', 'cfb')
     .eq('season', CURRENT_SEASON)
     .not('week', 'is', null)
 
   if (!allGames?.length) return { weeksNotified: [], sent: 0 }
 
-  const weeks = [...new Set(allGames.map((g) => g.week as number))]
+  // Only pickable (FBS) games count toward "this week is done" — a stray
+  // non-FBS game that never flips to completed shouldn't hold the results
+  // email (and next-week announcement) hostage forever.
+  const pickableGames = (allGames as unknown as (ConferenceJoinRow & { week: number; status: string })[])
+    .filter(isFbsMatchup)
+
+  const weeks = [...new Set(pickableGames.map((g) => g.week))]
   const settledWeeks = weeks.filter((w) => {
-    const gamesInWeek = allGames.filter((g) => g.week === w)
+    const gamesInWeek = pickableGames.filter((g) => g.week === w)
     return gamesInWeek.length > 0 && gamesInWeek.every((g) => g.status === GAME_STATUS.COMPLETED)
   })
   if (!settledWeeks.length) return { weeksNotified: [], sent: 0 }

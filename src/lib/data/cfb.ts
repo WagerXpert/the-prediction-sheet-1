@@ -198,22 +198,42 @@ export async function getCfbAvailableWeeks(): Promise<number[]> {
   return [...new Set(data.map((g) => g.week as number))].sort((a, b) => a - b)
 }
 
-// The open week is the earliest week that still has at least one non-completed game.
+// The open week is the earliest week that still has at least one non-completed
+// pickable game (i.e. a game between two FBS teams — the same filter
+// getCfbGamesByWeek uses to decide what actually shows up in the picks UI).
+// Non-FBS games that sneak into the schedule sync (e.g. small-college
+// matchups CFBD's /games endpoint returns alongside the FBS slate) are
+// excluded here so a straggler that never gets marked "completed" can't
+// freeze every later week's picks for good.
 // All other weeks are locked (view-only). Returns null if all weeks are complete or no games exist.
 export async function getOpenWeek(): Promise<number | null> {
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('games')
-    .select('week')
+    .select(
+      `week,
+       home_team:teams!games_home_team_id_fkey(conference_id),
+       away_team:teams!games_away_team_id_fkey(conference_id)`
+    )
     .eq('season', CURRENT_SEASON)
     .not('week', 'is', null)
     .neq('status', 'completed')
     .order('week')
-    .limit(1)
 
   if (!data?.length) return null
-  return data[0].week as number
+
+  type Row = {
+    week: number
+    home_team: { conference_id: string | null } | null
+    away_team: { conference_id: string | null } | null
+  }
+
+  const openWeek = (data as unknown as Row[]).find(
+    (g) => g.home_team?.conference_id != null && g.away_team?.conference_id != null
+  )
+
+  return openWeek?.week ?? null
 }
 
 // Returns actual W-L record for every team from completed games this season.

@@ -325,22 +325,40 @@ export async function syncSchedule(season = CURRENT_SEASON): Promise<SyncResult>
 // ---------------------------------------------------------------------------
 
 /**
- * Lowest week (this season) that still has an unfinished game — the week an
- * hourly sync actually needs to check, instead of re-scanning/re-grading the
- * whole season every run. Same "open week" definition used for pick reminders.
+ * Lowest week (this season) that still has an unfinished pickable game — the
+ * week an hourly sync actually needs to check, instead of re-scanning/re-grading
+ * the whole season every run. Same "open week" definition used for pick
+ * reminders: only games between two FBS teams count, so a non-FBS game that
+ * slipped into the schedule sync (CFBD's /games endpoint isn't classification-
+ * filtered) and never gets marked completed can't stall the sync forever.
  */
 export async function getCurrentSyncWeek(db: ReturnType<typeof createServiceClient>, season = CURRENT_SEASON): Promise<number | null> {
   const { data } = await db
     .from('games')
-    .select('week')
+    .select(
+      `week,
+       home_team:teams!games_home_team_id_fkey(conference_id),
+       away_team:teams!games_away_team_id_fkey(conference_id)`
+    )
     .eq('sport_id', 'cfb')
     .eq('season', season)
     .not('week', 'is', null)
     .neq('status', GAME_STATUS.COMPLETED)
     .order('week')
-    .limit(1)
 
-  return data?.[0]?.week ?? null
+  if (!data?.length) return null
+
+  type Row = {
+    week: number
+    home_team: { conference_id: string | null } | null
+    away_team: { conference_id: string | null } | null
+  }
+
+  const syncWeek = (data as unknown as Row[]).find(
+    (g) => g.home_team?.conference_id != null && g.away_team?.conference_id != null
+  )
+
+  return syncWeek?.week ?? null
 }
 
 export async function syncResults(season = CURRENT_SEASON, week?: number): Promise<SyncResult> {
