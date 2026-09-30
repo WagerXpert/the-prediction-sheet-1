@@ -171,7 +171,7 @@ function SeasonTable({
           <tr className="bg-zinc-50 border-b border-zinc-200 text-xs font-semibold text-zinc-400 uppercase tracking-wide">
             <th className="text-left px-5 py-3 w-12">#</th>
             <th className="text-left px-4 py-3">Player</th>
-            <th className="text-center px-4 py-3">Picks</th>
+            <th className="text-center px-4 py-3">Games</th>
             <th className="text-center px-4 py-3">Records</th>
             <th className="text-center px-4 py-3">Standings</th>
             <th className="text-center px-5 py-3">Total</th>
@@ -225,7 +225,9 @@ function SeasonTable({
                     {isMe && <YouBadge />}
                   </div>
                 </td>
-                <td className="px-4 py-3.5 text-center text-zinc-600">{entry.gamePoints}</td>
+                <td className="px-4 py-3.5 text-center text-zinc-600">
+                  {entry.gameTotal > 0 ? `${entry.gameCorrect}/${entry.gameTotal}` : '—'}
+                </td>
                 <td className="px-4 py-3.5 text-center text-zinc-600">{entry.recordPoints}</td>
                 <td className="px-4 py-3.5 text-center text-zinc-600">{entry.standingsPoints}</td>
                 <td className="px-5 py-3.5 text-center">

@@ -7,6 +7,7 @@ import { reminderFridayEmail } from './templates/reminderFriday'
 import { resultsSettledEmail } from './templates/resultsSettled'
 import { envizionAnnouncementEmail } from './templates/envizionAnnouncement'
 import { siteUpdateAnnouncementEmail } from './templates/siteUpdateAnnouncement'
+import { fetchAllRows } from '@/lib/supabase/paginate'
 
 type Db = ReturnType<typeof createServiceClient>
 
@@ -31,21 +32,27 @@ function isFbsMatchup(g: ConferenceJoinRow): boolean {
 
 /** Same "open week" definition as getOpenWeek() in lib/data/cfb.ts, against the service-role client the cron jobs use. */
 async function getOpenWeekForNotify(db: Db): Promise<number | null> {
-  const { data } = await db
-    .from('games')
-    .select(
-      `week,
-       home_team:teams!games_home_team_id_fkey(conference_id),
-       away_team:teams!games_away_team_id_fkey(conference_id)`
-    )
-    .eq('sport_id', 'cfb')
-    .eq('season', CURRENT_SEASON)
-    .not('week', 'is', null)
-    .neq('status', GAME_STATUS.COMPLETED)
-    .order('week')
+  // Paginated — a season can have more incomplete rows than PostgREST's
+  // default max-rows-per-request, so a plain `.select()` here would only see
+  // the first page and could miss earlier, still-incomplete weeks entirely.
+  const data = await fetchAllRows<ConferenceJoinRow & { week: number }>((from, to) =>
+    db
+      .from('games')
+      .select(
+        `week,
+         home_team:teams!games_home_team_id_fkey(conference_id),
+         away_team:teams!games_away_team_id_fkey(conference_id)`
+      )
+      .eq('sport_id', 'cfb')
+      .eq('season', CURRENT_SEASON)
+      .not('week', 'is', null)
+      .neq('status', GAME_STATUS.COMPLETED)
+      .order('week')
+      .range(from, to) as unknown as PromiseLike<{ data: (ConferenceJoinRow & { week: number })[] | null; error: unknown }>
+  )
 
-  if (!data?.length) return null
-  const row = (data as unknown as (ConferenceJoinRow & { week: number })[]).find(isFbsMatchup)
+  if (!data.length) return null
+  const row = data.find(isFbsMatchup)
   return row?.week ?? null
 }
 
@@ -214,24 +221,30 @@ export async function sendSettledWeekResults(): Promise<SettledResult> {
   assertSafeToBlast()
   const db = createServiceClient()
 
-  const { data: allGames } = await db
-    .from('games')
-    .select(
-      `week, status,
-       home_team:teams!games_home_team_id_fkey(conference_id),
-       away_team:teams!games_away_team_id_fkey(conference_id)`
-    )
-    .eq('sport_id', 'cfb')
-    .eq('season', CURRENT_SEASON)
-    .not('week', 'is', null)
+  // Paginated — a season has more game rows than PostgREST's default
+  // max-rows-per-request, so a plain `.select()` here would only see the
+  // first page and could mark a week "settled" before it actually is (or
+  // never mark a later week settled at all).
+  const allGames = await fetchAllRows<ConferenceJoinRow & { week: number; status: string }>((from, to) =>
+    db
+      .from('games')
+      .select(
+        `week, status,
+         home_team:teams!games_home_team_id_fkey(conference_id),
+         away_team:teams!games_away_team_id_fkey(conference_id)`
+      )
+      .eq('sport_id', 'cfb')
+      .eq('season', CURRENT_SEASON)
+      .not('week', 'is', null)
+      .range(from, to) as unknown as PromiseLike<{ data: (ConferenceJoinRow & { week: number; status: string })[] | null; error: unknown }>
+  )
 
-  if (!allGames?.length) return { weeksNotified: [], sent: 0 }
+  if (!allGames.length) return { weeksNotified: [], sent: 0 }
 
   // Only pickable (FBS) games count toward "this week is done" — a stray
   // non-FBS game that never flips to completed shouldn't hold the results
   // email (and next-week announcement) hostage forever.
-  const pickableGames = (allGames as unknown as (ConferenceJoinRow & { week: number; status: string })[])
-    .filter(isFbsMatchup)
+  const pickableGames = allGames.filter(isFbsMatchup)
 
   const weeks = [...new Set(pickableGames.map((g) => g.week))]
   const settledWeeks = weeks.filter((w) => {

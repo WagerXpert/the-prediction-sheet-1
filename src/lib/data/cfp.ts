@@ -5,6 +5,7 @@ import { computeCFPRankings, type TeamData, type TeamGameResult, type CFPRankedT
 import { generateCFPField, type CFPSeed } from '@/lib/cfp/selection'
 import { getTeamRating, DEFAULT_RATING } from '@/lib/cfp/team-ratings'
 import { simulateGame } from '@/lib/cfp/simulation'
+import { fetchAllRows } from '@/lib/supabase/paginate'
 import type { Json } from '@/lib/supabase/types'
 
 export type { CFPSeed, CFPRankedTeam }
@@ -139,17 +140,23 @@ interface AllFBSData {
 async function fetchAllFBSData(sessionId: string, season: number, simSeed: string): Promise<AllFBSData> {
   const supabase = await createClient()
 
-  const [confsRes, gamesRes, predsRes] = await Promise.all([
+  const [confsRes, games, predsRes] = await Promise.all([
     supabase
       .from('conferences')
       .select('id, name, abbreviation, teams(id, name, abbreviation, logo_url, color, conference_id)')
       .eq('sport_id', 'cfb'),
-    supabase
-      .from('games')
-      .select('id, home_team_id, away_team_id, conference_game, neutral_site, status, home_team_points, away_team_points')
-      .eq('sport_id', 'cfb')
-      .eq('season', season)
-      .eq('season_type', 'regular'),
+    // Paginated — a full regular season exceeds PostgREST's default
+    // max-rows-per-request, which would otherwise silently drop later games
+    // from CFP seeding/rating calculations.
+    fetchAllRows<AllFBSData['games'][number]>((from, to) =>
+      supabase
+        .from('games')
+        .select('id, home_team_id, away_team_id, conference_game, neutral_site, status, home_team_points, away_team_points')
+        .eq('sport_id', 'cfb')
+        .eq('season', season)
+        .eq('season_type', 'regular')
+        .range(from, to)
+    ),
     supabase
       .from('full_season_predictions')
       .select('game_id, winner_team_id')
@@ -195,7 +202,7 @@ async function fetchAllFBSData(sessionId: string, season: number, simSeed: strin
   {
     const wins = new Map<string, number>()
     const losses = new Map<string, number>()
-    for (const g of gamesRes.data ?? []) {
+    for (const g of games) {
       if (g.status !== 'completed' || g.home_team_points === null || g.away_team_points === null) continue
       if (!g.home_team_id || !g.away_team_id) continue
       const homeWon = (g.home_team_points as number) > (g.away_team_points as number)
@@ -247,7 +254,7 @@ async function fetchAllFBSData(sessionId: string, season: number, simSeed: strin
     teamById,
     teamsByConf,
     ratingByTeamId,
-    games: (gamesRes.data ?? []) as AllFBSData['games'],
+    games,
     predMap,
     getEffectiveWinner,
   }

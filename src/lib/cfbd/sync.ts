@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { cfbd } from './client'
 import { CURRENT_SEASON, GAME_STATUS } from '@/lib/utils/constants'
+import { fetchAllRows } from '@/lib/supabase/paginate'
 
 // Week 0  = games before week1Start  (early-kickoff Saturday, e.g. 8/29)
 // Week 1  = week1Start through the day before week2Start (Tue 9/1 – Sun 9/6)
@@ -245,14 +246,21 @@ export async function syncSchedule(season = CURRENT_SEASON): Promise<SyncResult>
       }
     }
 
-    // Build existing external_id → game id map
-    const { data: existingGames } = await db
-      .from('games')
-      .select('id, external_id')
-      .eq('sport_id', 'cfb')
-      .eq('season', season)
+    // Build existing external_id → game id map. Paginated — a season has more
+    // rows than PostgREST's default max-rows-per-request, so a plain `.select()`
+    // here would silently see only the first page and treat already-synced
+    // games outside it as new, causing duplicate-key insert failures.
+    const existingGames = await fetchAllRows<{ id: string; external_id: number | null }>(
+      (from, to) =>
+        db
+          .from('games')
+          .select('id, external_id')
+          .eq('sport_id', 'cfb')
+          .eq('season', season)
+          .range(from, to)
+    )
     const gameByExtId = new Map(
-      existingGames?.filter(g => g.external_id != null).map(g => [String(g.external_id!), g.id]) ?? []
+      existingGames.filter(g => g.external_id != null).map(g => [String(g.external_id!), g.id])
     )
 
     const toInsert: object[] = []
@@ -333,28 +341,34 @@ export async function syncSchedule(season = CURRENT_SEASON): Promise<SyncResult>
  * filtered) and never gets marked completed can't stall the sync forever.
  */
 export async function getCurrentSyncWeek(db: ReturnType<typeof createServiceClient>, season = CURRENT_SEASON): Promise<number | null> {
-  const { data } = await db
-    .from('games')
-    .select(
-      `week,
-       home_team:teams!games_home_team_id_fkey(conference_id),
-       away_team:teams!games_away_team_id_fkey(conference_id)`
-    )
-    .eq('sport_id', 'cfb')
-    .eq('season', season)
-    .not('week', 'is', null)
-    .neq('status', GAME_STATUS.COMPLETED)
-    .order('week')
-
-  if (!data?.length) return null
-
   type Row = {
     week: number
     home_team: { conference_id: string | null } | null
     away_team: { conference_id: string | null } | null
   }
 
-  const syncWeek = (data as unknown as Row[]).find(
+  // Paginated — a season can have more incomplete rows than PostgREST's
+  // default max-rows-per-request, so a plain `.select()` here would only see
+  // the first page and could miss earlier, still-incomplete weeks entirely.
+  const data = await fetchAllRows<Row>((from, to) =>
+    db
+      .from('games')
+      .select(
+        `week,
+         home_team:teams!games_home_team_id_fkey(conference_id),
+         away_team:teams!games_away_team_id_fkey(conference_id)`
+      )
+      .eq('sport_id', 'cfb')
+      .eq('season', season)
+      .not('week', 'is', null)
+      .neq('status', GAME_STATUS.COMPLETED)
+      .order('week')
+      .range(from, to) as unknown as PromiseLike<{ data: Row[] | null; error: unknown }>
+  )
+
+  if (!data.length) return null
+
+  const syncWeek = data.find(
     (g) => g.home_team?.conference_id != null && g.away_team?.conference_id != null
   )
 
@@ -376,15 +390,22 @@ export async function syncResults(season = CURRENT_SEASON, week?: number): Promi
 
     const completedGames = cfbdGames.filter(g => g.completed)
 
-    // Update our games table with scores + completed status
-    const { data: ourGames } = await db
-      .from('games')
-      .select('id, external_id')
-      .eq('sport_id', 'cfb')
-      .eq('season', season)
+    // Update our games table with scores + completed status. Paginated — a
+    // season has more game rows than PostgREST's default max-rows-per-request,
+    // so a plain `.select()` here would silently only see the first page and
+    // permanently miss updating any completed game outside it.
+    const ourGames = await fetchAllRows<{ id: string; external_id: number | null }>(
+      (from, to) =>
+        db
+          .from('games')
+          .select('id, external_id')
+          .eq('sport_id', 'cfb')
+          .eq('season', season)
+          .range(from, to)
+    )
 
     const gameByExtId = new Map(
-      ourGames?.filter(g => g.external_id != null).map(g => [String(g.external_id!), g.id]) ?? []
+      ourGames.filter(g => g.external_id != null).map(g => [String(g.external_id!), g.id])
     )
 
     const gamesToUpdate = completedGames
@@ -447,18 +468,26 @@ export async function syncResults(season = CURRENT_SEASON, week?: number): Promi
 // ---------------------------------------------------------------------------
 
 async function gradeGamePicks(db: ReturnType<typeof createServiceClient>, season: number, week?: number) {
-  // Fetch completed games with scores
-  let query = db
-    .from('games')
-    .select('id, home_team_id, away_team_id, home_team_points, away_team_points')
-    .eq('sport_id', 'cfb')
-    .eq('season', season)
-    .eq('status', GAME_STATUS.COMPLETED)
-
-  if (week) query = query.eq('week', week)
-
-  const { data: games } = await query
-  if (!games?.length) return
+  // Fetch completed games with scores. Paginated — as the season progresses
+  // this can exceed PostgREST's default max-rows-per-request, which would
+  // otherwise silently drop later games from grading.
+  const games = await fetchAllRows<{
+    id: string
+    home_team_id: string | null
+    away_team_id: string | null
+    home_team_points: number | null
+    away_team_points: number | null
+  }>((from, to) => {
+    let query = db
+      .from('games')
+      .select('id, home_team_id, away_team_id, home_team_points, away_team_points')
+      .eq('sport_id', 'cfb')
+      .eq('season', season)
+      .eq('status', GAME_STATUS.COMPLETED)
+    if (week) query = query.eq('week', week)
+    return query.range(from, to)
+  })
+  if (!games.length) return
 
   await Promise.all(games.map(async game => {
     if (game.home_team_points === null || game.away_team_points === null) return
@@ -484,15 +513,26 @@ async function gradeGamePicks(db: ReturnType<typeof createServiceClient>, season
 }
 
 async function gradePredictionRecords(db: ReturnType<typeof createServiceClient>, season: number) {
-  const { data: games } = await db
-    .from('games')
-    .select('home_team_id, away_team_id, home_team_points, away_team_points')
-    .eq('sport_id', 'cfb')
-    .eq('season', season)
-    .eq('season_type', 'regular')
-    .eq('status', GAME_STATUS.COMPLETED)
+  // Paginated — a full season of completed games can exceed PostgREST's
+  // default max-rows-per-request, which would otherwise silently undercount
+  // some teams' actual wins/losses.
+  const games = await fetchAllRows<{
+    home_team_id: string | null
+    away_team_id: string | null
+    home_team_points: number | null
+    away_team_points: number | null
+  }>((from, to) =>
+    db
+      .from('games')
+      .select('home_team_id, away_team_id, home_team_points, away_team_points')
+      .eq('sport_id', 'cfb')
+      .eq('season', season)
+      .eq('season_type', 'regular')
+      .eq('status', GAME_STATUS.COMPLETED)
+      .range(from, to)
+  )
 
-  if (!games?.length) return
+  if (!games.length) return
 
   // Tally wins per team
   const wins: Record<string, number> = {}
@@ -529,17 +569,27 @@ async function gradePredictionRecords(db: ReturnType<typeof createServiceClient>
 }
 
 async function gradePredictionStandings(db: ReturnType<typeof createServiceClient>, season: number) {
-  // Count conference wins per team for the season
-  const { data: games } = await db
-    .from('games')
-    .select('home_team_id, away_team_id, home_team_points, away_team_points, conference_game')
-    .eq('sport_id', 'cfb')
-    .eq('season', season)
-    .eq('season_type', 'regular')
-    .eq('status', GAME_STATUS.COMPLETED)
-    .eq('conference_game', true)
+  // Count conference wins per team for the season. Paginated — see the note
+  // in gradePredictionRecords above.
+  const games = await fetchAllRows<{
+    home_team_id: string | null
+    away_team_id: string | null
+    home_team_points: number | null
+    away_team_points: number | null
+    conference_game: boolean | null
+  }>((from, to) =>
+    db
+      .from('games')
+      .select('home_team_id, away_team_id, home_team_points, away_team_points, conference_game')
+      .eq('sport_id', 'cfb')
+      .eq('season', season)
+      .eq('season_type', 'regular')
+      .eq('status', GAME_STATUS.COMPLETED)
+      .eq('conference_game', true)
+      .range(from, to)
+  )
 
-  if (!games?.length) return
+  if (!games.length) return
 
   const confWins: Record<string, number> = {}
   for (const g of games) {

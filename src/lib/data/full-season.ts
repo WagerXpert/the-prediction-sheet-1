@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
 import { getConferenceLogo } from '@/lib/data/cfb'
+import { fetchAllRows } from '@/lib/supabase/paginate'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -101,20 +102,82 @@ export async function getSessionsByUserIds(userIds: string[], season = CURRENT_S
 }
 
 // Batch count of games picked (winner set) per session. Used by the leaderboard.
+// Paginated — across every user's session this can exceed PostgREST's default
+// max-rows-per-request, which would otherwise silently undercount picks.
 export async function getGamesPickedCounts(sessionIds: string[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>()
   if (!sessionIds.length) return counts
 
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('full_season_predictions')
-    .select('session_id')
-    .in('session_id', sessionIds)
+  const data = await fetchAllRows<{ session_id: string }>((from, to) =>
+    supabase
+      .from('full_season_predictions')
+      .select('session_id')
+      .in('session_id', sessionIds)
+      .range(from, to)
+  )
 
-  for (const row of data ?? []) {
+  for (const row of data) {
     counts.set(row.session_id, (counts.get(row.session_id) ?? 0) + 1)
   }
   return counts
+}
+
+// Batch game-pick accuracy per session: how many of a session's picks are for
+// games that have actually been played so far, and how many of those the user
+// got right. This is Full Season Mode's real scoring signal — the mode has no
+// separate "predicted record" or "predicted standings" input, both are derived
+// from these per-game winner picks. Paginated for the same reason as above.
+export async function getGamePickAccuracyBySession(
+  sessionIds: string[],
+  season = CURRENT_SEASON
+): Promise<Map<string, { correct: number; total: number }>> {
+  const result = new Map<string, { correct: number; total: number }>()
+  if (!sessionIds.length) return result
+
+  const supabase = await createClient()
+
+  const [picks, games] = await Promise.all([
+    fetchAllRows<{ session_id: string; game_id: string; winner_team_id: string }>((from, to) =>
+      supabase
+        .from('full_season_predictions')
+        .select('session_id, game_id, winner_team_id')
+        .in('session_id', sessionIds)
+        .range(from, to)
+    ),
+    fetchAllRows<{
+      id: string
+      home_team_id: string | null
+      away_team_id: string | null
+      status: string
+      home_team_points: number | null
+      away_team_points: number | null
+    }>((from, to) =>
+      supabase
+        .from('games')
+        .select('id, home_team_id, away_team_id, status, home_team_points, away_team_points')
+        .eq('sport_id', 'cfb')
+        .eq('season', season)
+        .eq('season_type', 'regular')
+        .range(from, to)
+    ),
+  ])
+
+  const gameById = new Map(games.map(g => [g.id, g]))
+
+  for (const p of picks) {
+    const game = gameById.get(p.game_id)
+    if (!game || game.status !== 'completed') continue
+    if (game.home_team_points === null || game.away_team_points === null) continue
+    const winnerId = game.home_team_points > game.away_team_points ? game.home_team_id : game.away_team_id
+
+    const rec = result.get(p.session_id) ?? { correct: 0, total: 0 }
+    rec.total++
+    if (p.winner_team_id === winnerId) rec.correct++
+    result.set(p.session_id, rec)
+  }
+
+  return result
 }
 
 export async function getOrCreateSession(userId: string, season = CURRENT_SEASON): Promise<FSSession | null> {
@@ -211,16 +274,29 @@ export async function getSessionDashboard(
   const predictedIds = new Set(picks?.map(p => p.game_id) ?? [])
   const winnerByGame = new Map(picks?.map(p => [p.game_id, p.winner_team_id]) ?? [])
 
-  // All regular season games — include status/points so completed games auto-count
-  const { data: games } = await supabase
-    .from('games')
-    .select('id, home_team_id, away_team_id, status, home_team_points, away_team_points')
-    .eq('sport_id', 'cfb')
-    .eq('season', season)
-    .eq('season_type', 'regular')
+  // All regular season games — include status/points so completed games
+  // auto-count. Paginated — a full regular season exceeds PostgREST's
+  // default max-rows-per-request, which would otherwise silently drop teams'
+  // later games from the progress counts below.
+  const games = await fetchAllRows<{
+    id: string
+    home_team_id: string | null
+    away_team_id: string | null
+    status: string
+    home_team_points: number | null
+    away_team_points: number | null
+  }>((from, to) =>
+    supabase
+      .from('games')
+      .select('id, home_team_id, away_team_id, status, home_team_points, away_team_points')
+      .eq('sport_id', 'cfb')
+      .eq('season', season)
+      .eq('season_type', 'regular')
+      .range(from, to)
+  )
 
   const teamCount = new Map<string, { total: number; predicted: number; wins: number; losses: number }>()
-  for (const g of games ?? []) {
+  for (const g of games) {
     // Actual result beats prediction; fall back to user's pick for future games
     const isActual = g.status === 'completed' && g.home_team_points !== null && g.away_team_points !== null
     const effectiveWinnerId: string | null = isActual

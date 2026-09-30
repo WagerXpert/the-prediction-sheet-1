@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
-import { getSessionsByUserIds, getGamesPickedCounts } from '@/lib/data/full-season'
+import { getSessionsByUserIds, getGamesPickedCounts, getGamePickAccuracyBySession } from '@/lib/data/full-season'
 import { getChampionPicksBySessionIds, type CFPChampionPick } from '@/lib/data/cfp'
 
 export interface LeaderboardEntry {
@@ -12,6 +12,10 @@ export interface LeaderboardEntry {
   standingsPoints: number
   totalPoints: number
   rank: number
+  // Game-winner picks decided so far (across CFB Pick'em + Full Season Mode)
+  // and how many of those the user got right — "12/18", not just "12".
+  gameCorrect: number
+  gameTotal: number
   // Full Season Mode extras — present only if the user has a Full Season session
   fullSeasonSessionId: string | null
   fullSeasonGamesPicked: number
@@ -45,7 +49,7 @@ export async function getSeasonLeaderboard(): Promise<LeaderboardEntry[]> {
   const [gamePreds, recordPreds, standingsPreds, profiles] = await Promise.all([
     supabase
       .from('predictions_game')
-      .select('user_id, points_awarded')
+      .select('user_id, points_awarded, is_correct')
       .in('prediction_set_id', predSetIds),
     supabase
       .from('predictions_record')
@@ -62,11 +66,15 @@ export async function getSeasonLeaderboard(): Promise<LeaderboardEntry[]> {
   ])
 
   const gameMap: Record<string, number> = {}
+  const gameDecidedMap: Record<string, number> = {}
   const recordMap: Record<string, number> = {}
   const standingsMap: Record<string, number> = {}
 
   for (const p of gamePreds.data ?? []) {
     gameMap[p.user_id] = (gameMap[p.user_id] ?? 0) + (p.points_awarded ?? 0)
+    if (p.is_correct !== null) {
+      gameDecidedMap[p.user_id] = (gameDecidedMap[p.user_id] ?? 0) + 1
+    }
   }
   for (const p of recordPreds.data ?? []) {
     recordMap[p.user_id] = (recordMap[p.user_id] ?? 0) + (p.points_awarded ?? 0)
@@ -84,9 +92,10 @@ export async function getSeasonLeaderboard(): Promise<LeaderboardEntry[]> {
   // Batched to avoid an N+1 query per leaderboard row.
   const fsSessionByUser = await getSessionsByUserIds(userIds)
   const fsSessionIds = [...fsSessionByUser.values()].map(s => s.id)
-  const [gamesPickedBySession, championBySession] = await Promise.all([
+  const [gamesPickedBySession, championBySession, accuracyBySession] = await Promise.all([
     getGamesPickedCounts(fsSessionIds),
     getChampionPicksBySessionIds(fsSessionIds),
+    getGamePickAccuracyBySession(fsSessionIds),
   ])
 
   const entries = userIds.map((userId) => {
@@ -95,6 +104,15 @@ export async function getSeasonLeaderboard(): Promise<LeaderboardEntry[]> {
     const recordPoints = recordMap[userId] ?? 0
     const standingsPoints = standingsMap[userId] ?? 0
     const fsSession = fsSessionByUser.get(userId) ?? null
+    const fsAccuracy = fsSession ? accuracyBySession.get(fsSession.id) : undefined
+
+    // Game-winner picks correct/decided so far — combines CFB Pick'em
+    // (predictions_game, 1pt per correct pick, so gamePoints === correct count)
+    // with Full Season Mode's own per-game picks, which have no separate point
+    // total of their own.
+    const gameCorrect = gamePoints + (fsAccuracy?.correct ?? 0)
+    const gameTotal = (gameDecidedMap[userId] ?? 0) + (fsAccuracy?.total ?? 0)
+
     return {
       userId,
       displayName: profile?.display_name ?? 'Anonymous',
@@ -102,8 +120,10 @@ export async function getSeasonLeaderboard(): Promise<LeaderboardEntry[]> {
       gamePoints,
       recordPoints,
       standingsPoints,
-      totalPoints: gamePoints + recordPoints + standingsPoints,
+      totalPoints: gameCorrect + recordPoints + standingsPoints,
       rank: 0,
+      gameCorrect,
+      gameTotal,
       fullSeasonSessionId: fsSession?.id ?? null,
       fullSeasonGamesPicked: fsSession ? (gamesPickedBySession.get(fsSession.id) ?? 0) : 0,
       championPick: fsSession ? (championBySession.get(fsSession.id) ?? null) : null,

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { CURRENT_SEASON } from '@/lib/utils/constants'
+import { fetchAllRows } from '@/lib/supabase/paginate'
 
 // Conference logos — verified ESPN CDN numeric IDs (screenshotted to confirm correct conference).
 // Keys cover both CFBD short names (after sync) and seed full names (before sync).
@@ -186,16 +187,21 @@ export async function getCfbGamesByWeek(week: number): Promise<CfbGame[]> {
 export async function getCfbAvailableWeeks(): Promise<number[]> {
   const supabase = await createClient()
 
-  const { data } = await supabase
-    .from('games')
-    .select('week')
-    .eq('season', CURRENT_SEASON)
-    .not('week', 'is', null)
-    .order('week')
+  // Paginated — a season has more game rows than PostgREST's default
+  // max-rows-per-request, so a plain `.select()` here would silently see only
+  // an early slice of weeks (ordering is ascending by week) and drop every
+  // later week from the picker entirely.
+  const data = await fetchAllRows<{ week: number }>((from, to) =>
+    supabase
+      .from('games')
+      .select('week')
+      .eq('season', CURRENT_SEASON)
+      .not('week', 'is', null)
+      .order('week')
+      .range(from, to)
+  )
 
-  if (!data) return []
-
-  return [...new Set(data.map((g) => g.week as number))].sort((a, b) => a - b)
+  return [...new Set(data.map((g) => g.week))].sort((a, b) => a - b)
 }
 
 // The open week is the earliest week that still has at least one non-completed
@@ -209,27 +215,33 @@ export async function getCfbAvailableWeeks(): Promise<number[]> {
 export async function getOpenWeek(): Promise<number | null> {
   const supabase = await createClient()
 
-  const { data } = await supabase
-    .from('games')
-    .select(
-      `week,
-       home_team:teams!games_home_team_id_fkey(conference_id),
-       away_team:teams!games_away_team_id_fkey(conference_id)`
-    )
-    .eq('season', CURRENT_SEASON)
-    .not('week', 'is', null)
-    .neq('status', 'completed')
-    .order('week')
-
-  if (!data?.length) return null
-
   type Row = {
     week: number
     home_team: { conference_id: string | null } | null
     away_team: { conference_id: string | null } | null
   }
 
-  const openWeek = (data as unknown as Row[]).find(
+  // Paginated — a season can have more incomplete rows than PostgREST's
+  // default max-rows-per-request, so a plain `.select()` here would only see
+  // the first page and could miss earlier, still-incomplete weeks entirely.
+  const data = await fetchAllRows<Row>((from, to) =>
+    supabase
+      .from('games')
+      .select(
+        `week,
+         home_team:teams!games_home_team_id_fkey(conference_id),
+         away_team:teams!games_away_team_id_fkey(conference_id)`
+      )
+      .eq('season', CURRENT_SEASON)
+      .not('week', 'is', null)
+      .neq('status', 'completed')
+      .order('week')
+      .range(from, to) as unknown as PromiseLike<{ data: Row[] | null; error: unknown }>
+  )
+
+  if (!data.length) return null
+
+  const openWeek = data.find(
     (g) => g.home_team?.conference_id != null && g.away_team?.conference_id != null
   )
 
@@ -242,17 +254,28 @@ export async function getActualTeamRecords(
 ): Promise<Record<string, { wins: number; losses: number }>> {
   const supabase = await createClient()
 
-  const { data: games } = await supabase
-    .from('games')
-    .select('home_team_id, away_team_id, home_team_points, away_team_points')
-    .eq('sport_id', 'cfb')
-    .eq('season', season)
-    .eq('status', 'completed')
-    .not('home_team_points', 'is', null)
-    .not('away_team_points', 'is', null)
+  // Paginated — by late season, completed games across all classifications
+  // can exceed PostgREST's default max-rows-per-request, which would
+  // otherwise silently undercount some teams' actual wins/losses.
+  const games = await fetchAllRows<{
+    home_team_id: string | null
+    away_team_id: string | null
+    home_team_points: number | null
+    away_team_points: number | null
+  }>((from, to) =>
+    supabase
+      .from('games')
+      .select('home_team_id, away_team_id, home_team_points, away_team_points')
+      .eq('sport_id', 'cfb')
+      .eq('season', season)
+      .eq('status', 'completed')
+      .not('home_team_points', 'is', null)
+      .not('away_team_points', 'is', null)
+      .range(from, to)
+  )
 
   const records: Record<string, { wins: number; losses: number }> = {}
-  for (const g of games ?? []) {
+  for (const g of games) {
     if (!g.home_team_id || !g.away_team_id) continue
     const homeWon = (g.home_team_points ?? 0) > (g.away_team_points ?? 0)
     records[g.home_team_id] ??= { wins: 0, losses: 0 }

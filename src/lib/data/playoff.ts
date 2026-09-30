@@ -4,6 +4,7 @@ import { computeCFPRankings, type TeamData, type TeamGameResult, type CFPRankedT
 import { generateCFPField, type CFPSeed } from '@/lib/cfp/selection'
 import { getTeamRating, DEFAULT_RATING } from '@/lib/cfp/team-ratings'
 import { simulateGame } from '@/lib/cfp/simulation'
+import { fetchAllRows } from '@/lib/supabase/paginate'
 import type { Json } from '@/lib/supabase/types'
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -120,17 +121,32 @@ interface SimResult {
 async function runFullSeasonSim(simSeed: string, season: number): Promise<SimResult> {
   const supabase = await createClient()
 
-  const [confsRes, gamesRes] = await Promise.all([
+  const [confsRes, games] = await Promise.all([
     supabase
       .from('conferences')
       .select('id, name, abbreviation, teams(id, name, abbreviation, logo_url, color, conference_id)')
       .eq('sport_id', 'cfb'),
-    supabase
-      .from('games')
-      .select('id, home_team_id, away_team_id, conference_game, neutral_site, status, home_team_points, away_team_points')
-      .eq('sport_id', 'cfb')
-      .eq('season', season)
-      .eq('season_type', 'regular'),
+    // Paginated — a full regular season exceeds PostgREST's default
+    // max-rows-per-request, which would otherwise silently drop later games
+    // from the simulation/rating calculations below.
+    fetchAllRows<{
+      id: string
+      home_team_id: string | null
+      away_team_id: string | null
+      conference_game: boolean | null
+      neutral_site: boolean | null
+      status: string
+      home_team_points: number | null
+      away_team_points: number | null
+    }>((from, to) =>
+      supabase
+        .from('games')
+        .select('id, home_team_id, away_team_id, conference_game, neutral_site, status, home_team_points, away_team_points')
+        .eq('sport_id', 'cfb')
+        .eq('season', season)
+        .eq('season_type', 'regular')
+        .range(from, to)
+    ),
   ])
 
   const teams: TeamData[] = []
@@ -159,7 +175,7 @@ async function runFullSeasonSim(simSeed: string, season: number): Promise<SimRes
   {
     const wins = new Map<string, number>()
     const losses = new Map<string, number>()
-    for (const g of gamesRes.data ?? []) {
+    for (const g of games) {
       if (g.status !== 'completed' || g.home_team_points === null || g.away_team_points === null) continue
       if (!g.home_team_id || !g.away_team_id) continue
       const homeWon = (g.home_team_points as number) > (g.away_team_points as number)
@@ -182,7 +198,7 @@ async function runFullSeasonSim(simSeed: string, season: number): Promise<SimRes
 
   // Resolve each game: actual result → simulation
   const effectiveWinners = new Map<string, string>()
-  for (const g of gamesRes.data ?? []) {
+  for (const g of games) {
     const { id, home_team_id, away_team_id, status, home_team_points, away_team_points, neutral_site } = g
     if (status === 'completed' && home_team_points !== null && away_team_points !== null && home_team_id && away_team_id) {
       effectiveWinners.set(id, (home_team_points as number) > (away_team_points as number) ? home_team_id : away_team_id)
@@ -197,7 +213,7 @@ async function runFullSeasonSim(simSeed: string, season: number): Promise<SimRes
   const results: Record<string, TeamGameResult[]> = {}
   for (const t of teams) results[t.id] = []
 
-  for (const g of gamesRes.data ?? []) {
+  for (const g of games) {
     const wid = effectiveWinners.get(g.id)
     if (!wid || !g.home_team_id || !g.away_team_id) continue
     for (const [tid, oid] of [
@@ -209,7 +225,7 @@ async function runFullSeasonSim(simSeed: string, season: number): Promise<SimRes
         game_id: g.id,
         opponent_id: oid,
         won: wid === tid,
-        conference_game: g.conference_game,
+        conference_game: g.conference_game ?? false,
       })
     }
   }
@@ -355,19 +371,31 @@ export async function updatePlayoffSeedings(bracketId: string, seedings: CFPSeed
 export async function getPlayoffTeamOptions(season = CURRENT_SEASON): Promise<PlayoffTeamOption[]> {
   const supabase = await createClient()
 
-  const [{ data: teams }, { data: games }] = await Promise.all([
+  const [{ data: teams }, games] = await Promise.all([
     supabase
       .from('teams')
       .select('id, name, abbreviation, logo_url, color, conference_id, conferences(name, abbreviation)')
       .eq('sport_id', 'cfb')
       .not('conference_id', 'is', null),
-    supabase
-      .from('games')
-      .select('home_team_id, away_team_id, home_team_points, away_team_points, conference_game')
-      .eq('sport_id', 'cfb')
-      .eq('season', season)
-      .eq('season_type', 'regular')
-      .eq('status', 'completed'),
+    // Paginated — by late season, completed games can exceed PostgREST's
+    // default max-rows-per-request, which would otherwise silently
+    // undercount some teams' actual wins/losses.
+    fetchAllRows<{
+      home_team_id: string | null
+      away_team_id: string | null
+      home_team_points: number | null
+      away_team_points: number | null
+      conference_game: boolean | null
+    }>((from, to) =>
+      supabase
+        .from('games')
+        .select('home_team_id, away_team_id, home_team_points, away_team_points, conference_game')
+        .eq('sport_id', 'cfb')
+        .eq('season', season)
+        .eq('season_type', 'regular')
+        .eq('status', 'completed')
+        .range(from, to)
+    ),
   ])
 
   const wins = new Map<string, number>()
@@ -375,7 +403,7 @@ export async function getPlayoffTeamOptions(season = CURRENT_SEASON): Promise<Pl
   const cWins = new Map<string, number>()
   const cLosses = new Map<string, number>()
 
-  for (const g of games ?? []) {
+  for (const g of games) {
     const { home_team_id: h, away_team_id: a, home_team_points: hp, away_team_points: ap, conference_game: cg } = g
     if (!h || !a || hp == null || ap == null) continue
     const homeWon = (hp as number) > (ap as number)
